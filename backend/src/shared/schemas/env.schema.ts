@@ -9,7 +9,7 @@ export function validateEnvironment(env: Environment) {
   required(env.MONGODB_URI, "MONGODB_URI", production);
   required(env.PRIVY_APP_ID, "PRIVY_APP_ID", production);
   required(env.PRIVY_APP_SECRET, "PRIVY_APP_SECRET", production);
-  required(env.WHEELHOUSE_API_KEY, "WHEELHOUSE_API_KEY", production);
+  required(env.WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY, "WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY", production);
   required(env.GROQ_API_KEY, "GROQ_API_KEY", production);
   if (production && env.TELEGRAM_BOT_TOKEN) {
     required(env.TELEGRAM_WEBHOOK_SECRET, "TELEGRAM_WEBHOOK_SECRET", true);
@@ -18,5 +18,6 @@ export function validateEnvironment(env: Environment) {
     if (!env.BACKEND_PUBLIC_URL?.startsWith("https://")) throw new Error("BACKEND_PUBLIC_URL must use HTTPS when Telegram is enabled");
   }
   if (production && env.TELEGRAM_BOT_TOKEN && (env.TELEGRAM_LINK_SECRET?.length ?? 0) < 32) throw new Error("TELEGRAM_LINK_SECRET must be at least 32 characters");
+  if (env.WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY && !/^[a-fA-F0-9]{64}$/.test(env.WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY)) throw new Error("WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY must be exactly 64 hexadecimal characters (32 bytes)");
   return env;
 }
