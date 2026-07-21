@@ -12,6 +12,9 @@ export class Snapshot {
   @Prop() marketOccupancy: number;
   @Prop() compSetOccupancy: number;
   @Prop() revenueScore: number;
+  @Prop() dynamicPricingEnabled: boolean;
+  @Prop() basePrice: number;
+  @Prop() recommendedBasePrice: number;
   @Prop({ type: Object }) raw: Record<string, unknown>;
 }
 export const SnapshotSchema = SchemaFactory.createForClass(Snapshot);

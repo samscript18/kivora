@@ -46,6 +46,7 @@ export const getStrategies = (listingId: string) => unwrap(api.get<Envelope<any>
 export const applyStrategy = (listingId: string, strategy: string) => unwrap(api.post<Envelope<any>>(`/listings/${encodeURIComponent(listingId)}/strategies/apply`, { strategy }));
 export const getReports = () => unwrap(api.get<Envelope<any[]>>("/reports"));
 export const generateExecutiveReport = () => unwrap(api.post<Envelope<any>>("/reports/executive"));
+export const generateReport = (input: { type: "executive" | "portfolio" | "owner" | "revenue"; listingId?: string }) => unwrap(api.post<Envelope<any>>("/reports/generate", input));
 export const getActivity = () => unwrap(api.get<Envelope<any[]>>("/activity"));
 export const askKivora = (question: string) => unwrap(api.post<Envelope<{ body: string; generatedBy: string; grounded: boolean }>>("/assistant/ask", { question }));
 export const getSegments = () => unwrap(api.get<Envelope<{ source: string; segments: any[] }>>("/segments"));

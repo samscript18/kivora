@@ -4,7 +4,7 @@ import { ApprovalGuard } from "../auth/guards/approval.guard";
 import { AuthenticatedUser, PrivyAuthGuard } from "../auth/guards/privy-auth.guard";
 import { TelegramService } from "../integrations/services/telegram.service";
 import { CurrentUser } from "../../shared/decorators/current-user.decorator";
-import { AskDto, StrategyDto, UnderwriteDto } from "./dto/revenue.dto";
+import { AskDto, ReportDto, StrategyDto, UnderwriteDto } from "./dto/revenue.dto";
 import { RevenueService } from "./revenue.service";
 
 @Controller()
@@ -31,6 +31,7 @@ export class RevenueController {
   @Get("activity") @UseGuards(PrivyAuthGuard) activity() { return this.revenue.getActivity(); }
   @Get("reports") @UseGuards(PrivyAuthGuard) reports() { return this.revenue.getReports(); }
   @Post("reports/executive") @UseGuards(PrivyAuthGuard) generateReport(@CurrentUser() user: AuthenticatedUser) { return this.revenue.generateExecutiveReport(user.name); }
+  @Post("reports/generate") @UseGuards(PrivyAuthGuard) generateTypedReport(@Body() body: ReportDto, @CurrentUser() user: AuthenticatedUser) { return this.revenue.generateReport(body.type, user.name, body.listingId); }
   @Post("assistant/ask") @UseGuards(PrivyAuthGuard) ask(@Body() body: AskDto) { return this.revenue.ask(body.question); }
 
   @Get("telegram/status") @UseGuards(PrivyAuthGuard)

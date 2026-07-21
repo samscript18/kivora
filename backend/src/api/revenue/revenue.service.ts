@@ -109,7 +109,7 @@ export class RevenueService {
     const divergence = recommended > 0 && base > 0 ? (recommended - base) / recommended : 0;
     const marketGap = Math.max(0, marketOccupancy - occupancy);
     const health = Math.max(0, Math.min(100, Math.round(100 - (posting ? 0 : 30) - Math.max(0, divergence) * 45 - marketGap * 30)));
-    await this.snapshots.create({ listingId: listing.id, channel: listing.channel, health, occupancy, adr, revenue, revpar, pickup, marketOccupancy, compSetOccupancy, revenueScore, raw: { kpis } });
+    await this.snapshots.create({ listingId: listing.id, channel: listing.channel, health, occupancy, adr, revenue, revpar, pickup, marketOccupancy, compSetOccupancy, revenueScore, dynamicPricingEnabled: posting, basePrice: base, recommendedBasePrice: recommended, raw: { kpis } });
     const serializedFlags = JSON.stringify(flagsResult).toLowerCase();
     const calendarFlag = /(calendar|sync|channel).*(error|fail|stale|disconnect)|(?:error|fail|stale|disconnect).*(calendar|sync|channel)/.test(serializedFlags);
     const slowPace = marketOccupancy > 0 && marketGap >= 0.2;
@@ -223,7 +223,8 @@ export class RevenueService {
       if (!option.basePrice) return { ...option, available: false, reason: "Wheelhouse did not return this base-price option" };
       const preview = await this.wheelhouse.preview(listing.id, listing.channel, { ...preferences, base_price: Math.round(option.basePrice), automatic_rate_posting_enabled: true });
       const projectedRevenue = this.total(preview);
-      return { ...option, available: true, projectedRevenue, estimatedUplift: projectedRevenue - currentRevenue, horizonDays: Math.min(30, preview.data?.length ?? 0), source: "Wheelhouse live non-mutating preview" };
+      const horizonDays = Math.min(30, preview.data?.length ?? 0);
+      return { ...option, available: true, projectedRevenue, projectedAdr: horizonDays ? Math.round(projectedRevenue / horizonDays) : 0, estimatedUplift: projectedRevenue - currentRevenue, horizonDays, source: "Wheelhouse live non-mutating preview" };
     }));
     return { listing: { id: listing.id, channel: listing.channel, name: listing.nickname || listing.title || listing.id }, currentRevenue, strategies: previews, mutated: false };
   }
@@ -245,11 +246,27 @@ export class RevenueService {
   async segment(id: number) { const [listings, metrics] = await Promise.all([this.wheelhouse.segmentListings(id), this.wheelhouse.segmentMetrics(id)]); return { source: "Wheelhouse live", id, listings, metrics }; }
 
   async generateExecutiveReport(actor: string) {
+    return this.generateReport("executive", actor);
+  }
+
+  async generateReport(type: "executive" | "portfolio" | "owner" | "revenue", actor: string, listingId?: string) {
     const dashboard = await this.dashboard();
-    const facts = { generatedAt: new Date().toISOString(), summary: dashboard.summary, priorities: dashboard.priorities.slice(0, 10), marketSignals: dashboard.signals.slice(0, 10), source: dashboard.source };
-    const generated = await this.groq.executiveReport(facts);
-    const report = await this.reports.create({ type: "executive", title: `Executive revenue report — ${new Date().toLocaleDateString("en-US")}`, body: generated.body, generatedBy: generated.generatedBy, metrics: facts, status: "draft" });
-    await this.audits.create({ action: "generate_executive_report", actor, after: { reportId: String(report._id) }, source: "Groq grounded in Wheelhouse live data", verified: true });
+    const portfolio = type === "portfolio" || type === "owner" ? await this.portfolio() : undefined;
+    const listing = listingId ? portfolio?.listings.find((item) => item.id === listingId) : undefined;
+    if (type === "owner" && !listing) throw new NotFoundException("Choose a live listing for an owner report");
+    const facts = {
+      generatedAt: new Date().toISOString(), reportType: type, source: dashboard.source,
+      summary: dashboard.summary,
+      priorities: dashboard.priorities.slice(0, 10),
+      opportunities: type === "revenue" || type === "executive" ? dashboard.opportunities.slice(0, 20) : undefined,
+      marketSignals: dashboard.signals.slice(0, 10),
+      portfolio: type === "portfolio" ? portfolio?.listings.map((item) => ({ id: item.id, name: item.nickname || item.title || item.id, metrics: item.metrics })) : undefined,
+      listing: type === "owner" ? listing : undefined,
+    };
+    const generated = await this.groq.report(type, facts);
+    const label = ({ executive: "Executive revenue report", portfolio: "Portfolio performance report", owner: `Owner report — ${listing?.nickname || listing?.title || listingId}`, revenue: "Revenue opportunity summary" })[type];
+    const report = await this.reports.create({ type, title: `${label} — ${new Date().toLocaleDateString("en-US")}`, body: generated.body, generatedBy: generated.generatedBy, metrics: facts, status: "draft" });
+    await this.audits.create({ action: `generate_${type}_report`, actor, after: { reportId: String(report._id), listingId }, source: "Groq grounded in Wheelhouse live data", verified: true });
     return report.toObject();
   }
 

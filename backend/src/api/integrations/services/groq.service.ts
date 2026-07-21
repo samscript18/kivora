@@ -26,6 +26,11 @@ export class GroqService {
     return this.complete("Write a concise executive revenue report from only the supplied JSON. Clearly label estimates, call out priorities, and never invent metrics.", JSON.stringify(input));
   }
 
+  async report(type: "executive" | "portfolio" | "owner" | "revenue", input: unknown) {
+    const audience = type === "owner" ? "a property owner" : type === "executive" ? "an executive leadership team" : "a revenue management team";
+    return this.complete(`Write a concise ${type} report for ${audience} using only the supplied JSON. Clearly distinguish measured values from estimates, include next actions, and never invent metrics.`, JSON.stringify(input));
+  }
+
   async answer(question: string, context: unknown) {
     return this.complete("You are Kivora, a revenue operations assistant. Answer only from the supplied live-data context. Distinguish measured values from estimates. If the context cannot answer, say so.", JSON.stringify({ question, context }));
   }

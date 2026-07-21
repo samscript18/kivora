@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 
 @Schema({ timestamps: true, bufferCommands: false })
 export class Report {
-  @Prop({ required: true, enum: ["executive", "portfolio", "owner"] }) type!: string;
+  @Prop({ required: true, enum: ["executive", "portfolio", "owner", "revenue"] }) type!: string;
   @Prop({ required: true }) title!: string;
   @Prop({ required: true }) body!: string;
   @Prop({ required: true }) generatedBy!: string;
