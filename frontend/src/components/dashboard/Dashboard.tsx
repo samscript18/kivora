@@ -4,7 +4,7 @@ import { getDashboard, previewIncident, resolveIncident } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from "recharts";
-import { AlertTriangle, ArrowRight, Bell, Bot, Building2, Check, ChevronDown, CircleDollarSign, Command, FileText, Gauge, House, LayoutDashboard, Menu, MoreHorizontal, Settings, ShieldCheck, Sparkles, TrendingUp, X, Zap } from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, Bell, Bot, Building2, Check, ChevronDown, CircleDollarSign, CloudSun, Command, FileText, Gauge, House, LayoutDashboard, Menu, MessageSquare, MoreHorizontal, Settings, ShieldCheck, Sparkles, TrendingUp, Users, X, Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ProductView, type WorkspaceView } from "./ProductViews";
@@ -32,7 +32,13 @@ function Sidebar({ mobile, onClose, active, onNavigate, onSettings }: { mobile?:
 		{ i: AlertTriangle, l: "Incidents" },
 		{ i: Building2, l: "Portfolio" },
 		{ i: TrendingUp, l: "Opportunities" },
+		{ i: CloudSun, l: "Market intelligence" },
+		{ i: Sparkles, l: "Strategy simulator" },
+		{ i: Users, l: "Portfolios" },
 		{ i: FileText, l: "Owner briefs" },
+		{ i: FileText, l: "Reports" },
+		{ i: Activity, l: "Activity" },
+		{ i: MessageSquare, l: "AI assistant" },
 		{ i: House, l: "Underwrite" },
 	];
 	return (
@@ -46,7 +52,7 @@ function Sidebar({ mobile, onClose, active, onNavigate, onSettings }: { mobile?:
 				)}
 			</div>
 			<div className="px-2 text-[10px] font-bold uppercase tracking-[.15em] text-[#9aa39e]">Workspace</div>
-			<nav className="mt-3 space-y-1">
+			<nav className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
 				{nav.map(({ i: I, l }) => (
 					<button
 						key={l}
@@ -61,11 +67,11 @@ function Sidebar({ mobile, onClose, active, onNavigate, onSettings }: { mobile?:
 					</button>
 				))}
 			</nav>
-			<div className="mt-auto rounded-2xl bg-[#173f2e] p-4 text-white">
+			<div className="mt-4 rounded-2xl bg-[#173f2e] p-4 text-white">
 				<div className="flex items-center gap-2 text-[11px] font-semibold text-[#d8f45b]">
 					<Bot size={15} /> Live monitoring
 				</div>
-				<p className="mt-2 text-[11px] leading-relaxed text-white/65">Wheelhouse scans run every 10 minutes.</p>
+				<p className="mt-2 text-[11px] leading-relaxed text-white/65">Wheelhouse scans run every 2 minutes.</p>
 			</div>
 			<button
 				onClick={() => {
@@ -184,6 +190,15 @@ export function Dashboard() {
 							<h2 className="display mt-1 text-2xl font-bold tracking-[-.04em] sm:text-[29px]">Live portfolio overview</h2>
 							<p className="mt-1 text-[12px] text-[#7a8580]">All figures below come from the latest Wheelhouse scan.</p>
 						</div>
+						<section className="card mb-5 overflow-hidden rounded-2xl">
+							<div className="flex items-center justify-between border-b border-white/8 p-5">
+								<div><div className="font-mono text-[9px] uppercase tracking-[.18em] text-accent">AI Revenue War Room</div><h3 className="display mt-1 text-lg font-bold">Today&apos;s highest-impact actions</h3></div>
+								<span className="rounded-full border border-white/10 px-3 py-1 font-mono text-[9px] text-slate-400">LIVE PRIORITY QUEUE</span>
+							</div>
+							<div className="divide-y divide-white/6">
+								{data.priorities?.length ? data.priorities.slice(0, 5).map((priority: any, index: number) => <div key={priority.id} className="flex items-center gap-4 p-4"><span className="font-mono text-xs text-accent">0{index + 1}</span><div className="min-w-0 flex-1"><div className="truncate text-xs font-bold">{priority.title}</div><div className="mt-1 truncate text-[10px] text-slate-500">{priority.property} · {priority.action}</div></div><div className="text-right">{priority.impact != null && <div className="text-xs font-bold text-accent-2">{money(priority.impact)}</div>}<div className="text-[9px] text-slate-500">{priority.confidence}% confidence</div></div></div>) : <div className="p-5 text-xs text-slate-500">No actions are currently ranked.</div>}
+							</div>
+						</section>
 						<div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
 							<Metric label="Portfolio health" value={`${s.health}/100`} detail="Latest listing snapshots" icon={ShieldCheck} tone="bg-[#e4f2ea] text-[#26704f]" />
 							<Metric label="30-day revenue" value={money(s.revenue)} detail="Wheelhouse KPI total" icon={CircleDollarSign} tone="bg-[#edf5cf] text-[#5c7219]" />

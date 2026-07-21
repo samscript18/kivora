@@ -3,11 +3,13 @@ import axios from "axios";
 export type DashboardData = {
 	source: string;
 	capabilities: any;
-	summary: { health: number; revenue: number; atRisk: number; opportunities: number; occupancy: number };
+	summary: { health: number; revenue: number; atRisk: number; opportunities: number; occupancy: number; criticalIncidents: number; marketSignals: number };
 	trend: Array<{ day: string; revenue: number; market?: number }>;
 	incident: any | null;
 	opportunities: any[];
 	activity: any[];
+	priorities: any[];
+	signals: any[];
 };
 
 type Envelope<T> = { success: true; data: T };
@@ -38,3 +40,12 @@ export const createTelegramLink = () => unwrap(api.post<Envelope<{ url: string; 
 export const disconnectTelegram = () => unwrap(api.delete<Envelope<{ connected: false }>>("/telegram/connection"));
 export const syncUser = (profile: { email?: string; name?: string }) => unwrap(api.post<Envelope<any>>("/auth/sync", profile));
 export const connectTelegram = (intent: string, signature: string) => unwrap(api.post<Envelope<any>>("/telegram/connect", { intent, signature }));
+export const getMarketIntelligence = () => unwrap(api.get<Envelope<any[]>>("/market-intelligence"));
+export const refreshMarketIntelligence = () => unwrap(api.post<Envelope<any>>("/market-intelligence/refresh"));
+export const getStrategies = (listingId: string) => unwrap(api.get<Envelope<any>>(`/listings/${encodeURIComponent(listingId)}/strategies`));
+export const applyStrategy = (listingId: string, strategy: string) => unwrap(api.post<Envelope<any>>(`/listings/${encodeURIComponent(listingId)}/strategies/apply`, { strategy }));
+export const getReports = () => unwrap(api.get<Envelope<any[]>>("/reports"));
+export const generateExecutiveReport = () => unwrap(api.post<Envelope<any>>("/reports/executive"));
+export const getActivity = () => unwrap(api.get<Envelope<any[]>>("/activity"));
+export const askKivora = (question: string) => unwrap(api.post<Envelope<{ body: string; generatedBy: string; grounded: boolean }>>("/assistant/ask", { question }));
+export const getSegments = () => unwrap(api.get<Envelope<{ source: string; segments: any[] }>>("/segments"));
