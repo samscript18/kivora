@@ -5,7 +5,7 @@ services:
     volumes: ["kivora_mongo:/data/db"]
   backend:
     build: ./backend
-    env_file: ./backend/.env
+    env_file: ./backend/.env.local
     environment:
       HOST: 0.0.0.0
       MONGODB_URI: mongodb://mongo:27017/kivora

@@ -29,6 +29,9 @@
 **/.cache/
 **/.tmp/
 **/tmp/
+**/.turbo/
+**/.eslintcache
+**/next-panic-*.log
 *.pid
 
 # editor, OS, and deployment metadata
