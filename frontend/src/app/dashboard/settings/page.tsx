@@ -5,6 +5,7 @@ import {
   getTelegramStatus,
   createTelegramLink,
   disconnectTelegram,
+  getCapabilities,
   getSegments,
   underwriteProperty,
   QUERY_KEYS
@@ -51,6 +52,11 @@ export default function SettingsPage() {
     queryFn: getTelegramStatus,
   });
 
+  const capabilitiesQuery = useQuery({
+    queryKey: QUERY_KEYS.capabilities,
+    queryFn: getCapabilities,
+  });
+
   const segmentsQuery = useQuery({
     queryKey: QUERY_KEYS.segments,
     queryFn: getSegments,
@@ -86,6 +92,10 @@ export default function SettingsPage() {
   });
 
   const telegramData = telegramStatusQuery.data;
+  const capabilities = capabilitiesQuery.data;
+  const pricing = capabilities?.wheelhouse;
+  const eventIntelligence = capabilities?.marketIntelligence?.ticketmaster;
+  const weatherIntelligence = capabilities?.marketIntelligence?.openweather;
   const segments: PortfolioSegment[] = segmentsQuery.data?.segments ?? [];
 
   const isValidUnderwrite = address && Number(marketId) > 0 && Number(cost) > 0 && Number(expenses) >= 0;
@@ -149,11 +159,19 @@ export default function SettingsPage() {
                   <p className="text-[11px] text-slate-500">Core pricing and portfolio synchronization</p>
                 </div>
               </div>
-              <StatusBadge variant="healthy" label="CONNECTED" />
+              <StatusBadge
+                variant={pricing?.connected ? "healthy" : pricing?.configured ? "pending" : "disconnected"}
+                label={pricing?.connected ? "CONNECTED" : pricing?.configured ? "VERIFYING" : "NOT CONNECTED"}
+              />
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
               Provides live portfolio, listing, pricing, calendar, booking pace, ADR, RevPAR, and dynamic pricing rules.
             </p>
+            {pricing?.configured && (
+              <div className="rounded-xl border border-border bg-elevated px-4 py-3 text-[11px] text-slate-400">
+                Action access: <span className="font-semibold text-foreground">{pricing.writeAccess === "verified" ? "write verified" : pricing.writeAccess === "read_only" ? "read-only" : "verified by the first approved live action"}</span>
+              </div>
+            )}
           </article>
 
           {/* Telegram Mobile Companion */}
@@ -223,7 +241,10 @@ export default function SettingsPage() {
                   <p className="text-[11px] text-slate-500">Live concert, sports, and venue demand signals</p>
                 </div>
               </div>
-              <StatusBadge variant="healthy" label="ACTIVE" />
+              <StatusBadge
+                variant={eventIntelligence?.configured ? "healthy" : "disconnected"}
+                label={eventIntelligence?.configured ? "ACTIVE" : "NOT CONFIGURED"}
+              />
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
               Detects local events near listings to capture event-driven demand surges and surge pricing windows.
@@ -242,7 +263,10 @@ export default function SettingsPage() {
                   <p className="text-[11px] text-slate-500">Weather forecast and travel impact data</p>
                 </div>
               </div>
-              <StatusBadge variant="healthy" label="ACTIVE" />
+              <StatusBadge
+                variant={weatherIntelligence?.configured ? "healthy" : "disconnected"}
+                label={weatherIntelligence?.configured ? "ACTIVE" : "NOT CONFIGURED"}
+              />
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
               Monitors seasonal weather shifts and severe weather warnings that affect regional booking pace.

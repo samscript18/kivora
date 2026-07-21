@@ -306,7 +306,10 @@ export interface Capabilities {
     writeAccess: "read_only" | "unverified" | "verified";
     lastError?: number | null;
   };
-  marketIntelligence?: Record<string, unknown>;
+  marketIntelligence?: {
+    ticketmaster: { configured: boolean; mode: "live" | "disabled" };
+    openweather: { configured: boolean; mode: "live" | "disabled" };
+  };
   telegram?: Record<string, unknown>;
   ai?: Record<string, unknown>;
   database?: Record<string, unknown>;
