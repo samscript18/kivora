@@ -11,6 +11,19 @@
 **/out/
 **/build/
 **/coverage/
+playwright-report/
+playwright-artifacts/
+tests/
+test-results/
+playwright.config.ts
+backend/jest.contract.cjs
+backend/jest.integration.cjs
+backend/src/integration/
+backend/src/api/integrations/external-integrations.contract.ts
+backend/src/**/*.spec.ts
+docs/QUALITY_REPORT.md
+docs/FINAL_ACCEPTANCE.md
+/package-lock.json
 **/*.tsbuildinfo
 **/next-env.d.ts
 

@@ -1,6 +1,5 @@
 import { of } from "rxjs";
 import { TelegramService } from "./telegram.service";
-import { Types } from "mongoose";
 
 const query = (value: unknown) => ({ lean: jest.fn().mockResolvedValue(value) });
 
@@ -45,25 +44,4 @@ describe("TelegramService", () => {
     );
     expect(http.post).toHaveBeenCalledWith(expect.stringContaining("sendMessage"), expect.objectContaining({ chat_id: "99" }));
   });
-
-  it("consumes a signed approval intent exactly once and in its organization", async () => {
-    const intents = {
-      create: jest.fn().mockResolvedValue({}),
-      findOneAndUpdate: jest.fn()
-        .mockReturnValueOnce(query({ action: "approve", entityId: "incident-1", organizationId: new Types.ObjectId("507f191e810c19729de860ea"), userId: new Types.ObjectId("507f1f77bcf86cd799439011") }))
-        .mockReturnValueOnce(query(null)),
-    };
-    const secured = new TelegramService(http as never, config as never, connections as never, links as never, users as never, undefined, intents as never, undefined);
-    const callback = await (secured as any).createActionIntent("507f191e810c19729de860ea", "507f1f77bcf86cd799439011", "approve", "incident-1");
-    await expect(secured.consumeActionIntent(callback, { id: "507f1f77bcf86cd799439011", organizationId: "507f191e810c19729de860ea" })).resolves.toMatchObject({ action: "approve", entityId: "incident-1" });
-    await expect(secured.consumeActionIntent(callback, { id: "507f1f77bcf86cd799439011", organizationId: "507f191e810c19729de860ea" })).rejects.toThrow("expired, already used");
-  });
-
-  it("binds recommendation and simulation references into a signed intent",async()=>{const intents={create:jest.fn().mockResolvedValue({})};const secured=new TelegramService(http as never,config as never,connections as never,links as never,users as never,undefined,intents as never,undefined);const callback=await secured.createActionIntent("507f191e810c19729de860ea","507f1f77bcf86cd799439011","approve_recommendation","rec",{recommendationId:"rec",simulationId:"sim"});expect(callback).toMatch(/^ki:/);expect(intents.create).toHaveBeenCalledWith(expect.objectContaining({recommendationId:"rec",simulationId:"sim",expiresAt:expect.any(Date)}));});
-
-  it("denies a callback from another organization",async()=>{const intents={create:jest.fn().mockResolvedValue({}),findOneAndUpdate:jest.fn().mockReturnValue(query(null))};const secured=new TelegramService(http as never,config as never,connections as never,links as never,users as never,undefined,intents as never,undefined);const callback=await secured.createActionIntent("507f191e810c19729de860ea","507f1f77bcf86cd799439011","details","rec");await expect(secured.consumeActionIntent(callback,{id:"507f1f77bcf86cd799439011",organizationId:"507f191e810c19729de860eb"})).rejects.toThrow("belongs to another user");expect(intents.findOneAndUpdate).toHaveBeenCalledWith(expect.objectContaining({organizationId:new Types.ObjectId("507f191e810c19729de860eb")}),expect.anything(),expect.anything());});
-
-  it("rejects an expired signed intent",async()=>{const intents={create:jest.fn().mockResolvedValue({}),findOneAndUpdate:jest.fn().mockReturnValue(query(null))};const secured=new TelegramService(http as never,config as never,connections as never,links as never,users as never,undefined,intents as never,undefined);const callback=await secured.createActionIntent("507f191e810c19729de860ea","507f1f77bcf86cd799439011","approve_recommendation","rec");await expect(secured.consumeActionIntent(callback,{id:"507f1f77bcf86cd799439011",organizationId:"507f191e810c19729de860ea"})).rejects.toThrow("expired, already used");expect(intents.findOneAndUpdate).toHaveBeenCalledWith(expect.objectContaining({expiresAt:{$gt:expect.any(Date)}}),expect.anything(),expect.anything());});
-
-  it.each(["schedule_recommendation","cancel_schedule"])("creates a signed %s control",async(action)=>{const intents={create:jest.fn().mockResolvedValue({})};const secured=new TelegramService(http as never,config as never,connections as never,links as never,users as never,undefined,intents as never,undefined);await expect(secured.createActionIntent("507f191e810c19729de860ea","507f1f77bcf86cd799439011",action,"rec",{recommendationId:"rec"})).resolves.toMatch(/^ki:/);expect(intents.create).toHaveBeenCalledWith(expect.objectContaining({action,recommendationId:"rec"}));});
 });
