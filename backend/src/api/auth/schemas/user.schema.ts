@@ -5,5 +5,7 @@ export class User {
   @Prop({lowercase:true}) email?:string;
   @Prop({default:"Revenue manager"}) name:string;
   @Prop({default:"manager",enum:["viewer","manager","admin"]}) role:string;
+  @Prop() timezone?: string;
+  @Prop() briefingTime?: string;
 }
 export const UserSchema=SchemaFactory.createForClass(User);

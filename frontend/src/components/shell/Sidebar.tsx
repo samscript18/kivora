@@ -17,7 +17,10 @@ import {
   Zap,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { getDashboard, QUERY_KEYS } from "@/lib/api";
+import { getDashboard, getOrganizations, QUERY_KEYS } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+
+const ORGANIZATION_STORAGE_KEY = "kivora.organizationId";
 
 const nav = [
   { icon: Home,          label: "War Room",     href: "/dashboard/war-room",    badge: "primary" },
@@ -57,7 +60,10 @@ interface SidebarProps {
 
 export function Sidebar({ mobile, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: QUERY_KEYS.dashboard, queryFn: getDashboard, staleTime: 60_000 });
+  const { data: organizations = [] } = useQuery({ queryKey: QUERY_KEYS.organizations, queryFn: getOrganizations });
+  const selectedOrganizationId = typeof window === "undefined" ? "" : window.localStorage.getItem(ORGANIZATION_STORAGE_KEY) || organizations[0]?.id || "";
   const criticalIncidents = data?.summary.criticalIncidents ?? 0;
   const opportunities     = data?.summary.opportunities ?? 0;
 
@@ -91,8 +97,21 @@ export function Sidebar({ mobile, onClose }: SidebarProps) {
         )}
       </div>
 
-      {/* Portfolio indicator */}
+      {/* Organization and portfolio context */}
       <div className="mx-4 mt-4 rounded-xl bg-white/[0.03] border border-border px-3 py-2.5">
+        {organizations.length > 0 && (
+          <select
+            aria-label="Active organization"
+            value={selectedOrganizationId}
+            onChange={(event) => {
+              window.localStorage.setItem(ORGANIZATION_STORAGE_KEY, event.target.value);
+              void queryClient.invalidateQueries();
+            }}
+            className="mb-2 w-full truncate rounded-lg border border-border bg-elevated px-2 py-1.5 text-[10px] font-semibold text-foreground outline-none focus:border-accent"
+          >
+            {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
+          </select>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Portfolio</span>
           <span className={`flex items-center gap-1 text-[9px] font-bold ${data ? "text-emerald-500" : "text-slate-600"}`}>

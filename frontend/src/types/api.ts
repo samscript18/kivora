@@ -26,6 +26,23 @@ export type ReportType = "executive" | "portfolio" | "owner" | "revenue";
 export type SignalKind = "event" | "weather";
 export type StrategyKey = "conservative" | "balanced" | "aggressive";
 
+export type OrganizationRole = "owner" | "administrator" | "revenue_manager" | "analyst" | "viewer";
+export interface OrganizationSummary {
+  id: string;
+  name: string;
+  slug: string;
+  role: OrganizationRole;
+  defaultCurrency?: string;
+  defaultTimezone: string;
+}
+export interface AuthUser {
+  id: string;
+  name: string;
+  email?: string;
+  organizationId: string;
+  organizationRole: OrganizationRole;
+}
+
 // ─── Listing ─────────────────────────────────────────────────────────────────
 export interface ListingLocation {
   address?: string;

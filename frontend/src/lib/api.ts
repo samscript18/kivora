@@ -8,6 +8,8 @@ import type {
   MarketSignal,
   Opportunity,
   OwnerBrief,
+  AuthUser,
+  OrganizationSummary,
   PortfolioData,
   PreviewResult,
   Report,
@@ -33,6 +35,7 @@ export const QUERY_KEYS = {
   reports: ["reports"] as const,
   briefs: ["briefs"] as const,
   telegramStatus: ["telegram-status"] as const,
+  organizations: ["organizations"] as const,
   strategies: (listingId: string) => ["strategies", listingId] as const,
 } as const;
 
@@ -66,6 +69,7 @@ export const api = axios.create({
 });
 
 let accessTokenProvider: null | (() => Promise<string | null>) = null;
+let organizationIdProvider: null | (() => string | null) = null;
 
 export const setAccessTokenProvider = (
   provider: typeof accessTokenProvider,
@@ -73,9 +77,15 @@ export const setAccessTokenProvider = (
   accessTokenProvider = provider;
 };
 
+export const setOrganizationIdProvider = (provider: typeof organizationIdProvider) => {
+  organizationIdProvider = provider;
+};
+
 api.interceptors.request.use(async (config) => {
   const token = await accessTokenProvider?.();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  const organizationId = organizationIdProvider?.();
+  if (organizationId) config.headers["X-Kivora-Organization-Id"] = organizationId;
   return config;
 });
 
@@ -167,7 +177,10 @@ export const disconnectTelegram = () =>
   );
 
 export const syncUser = (profile: { email?: string; name?: string }) =>
-  unwrap(api.post<Envelope<{ synced: true }>>("/auth/sync", profile));
+  unwrap(api.post<Envelope<AuthUser>>("/auth/sync", profile));
+
+export const getOrganizations = () =>
+  unwrap(api.get<Envelope<OrganizationSummary[]>>("/auth/organizations"));
 
 export const connectTelegram = (intent: string, signature: string) =>
   unwrap(api.post<Envelope<{ connected: true }>>("/telegram/connect", { intent, signature }));

@@ -1,9 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
+import { CanActivate, ExecutionContext, HttpException, Injectable, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrivyClient } from "@privy-io/node";
 import { AuthService } from "../auth.service";
 
-export type AuthenticatedUser = { sub: string; privyUserId: string; email?: string; name: string; role: string };
+export type AuthenticatedUser = { sub: string; privyUserId: string; email?: string; name: string; role: string; organizationId: string; organizationRole: string };
 
 @Injectable()
 export class PrivyAuthGuard implements CanActivate {
@@ -22,10 +22,12 @@ export class PrivyAuthGuard implements CanActivate {
     if (!bearer) throw new UnauthorizedException("Privy authentication is required");
     try {
       const claims = await this.client.utils().auth().verifyAccessToken(bearer);
-      const user = await this.auth.findOrCreate(claims.user_id);
-      request.user = { sub: user.id, privyUserId: user.privyUserId, email: user.email, name: user.name, role: user.role };
+      const requestedOrganizationId = request.headers["x-kivora-organization-id"];
+      const user = await this.auth.findOrCreate(claims.user_id, requestedOrganizationId);
+      request.user = { sub: user.id, privyUserId: user.privyUserId, email: user.email, name: user.name, role: user.role, organizationId: user.organizationId!, organizationRole: user.organizationRole! };
       return true;
-    } catch {
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException("Privy access token is invalid or expired");
     }
   }

@@ -11,4 +11,7 @@ export class AuthController {
 
   @Get("me") @UseGuards(PrivyAuthGuard)
   me(@CurrentUser() user: AuthenticatedUser) { return user; }
+
+  @Get("organizations") @UseGuards(PrivyAuthGuard)
+  organizations(@CurrentUser() user: AuthenticatedUser) { return this.auth.listOrganizations(user.sub); }
 }

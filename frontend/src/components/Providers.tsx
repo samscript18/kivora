@@ -4,7 +4,9 @@ import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
-import { setAccessTokenProvider, syncUser } from "@/lib/api";
+import { setAccessTokenProvider, setOrganizationIdProvider, syncUser } from "@/lib/api";
+
+const ORGANIZATION_STORAGE_KEY = "kivora.organizationId";
 
 function AuthBridge({ children }: { children: React.ReactNode }) {
 	const { ready, authenticated, user, getAccessToken } = usePrivy();
@@ -12,6 +14,7 @@ function AuthBridge({ children }: { children: React.ReactNode }) {
 
 	useEffect(() => {
 		setAccessTokenProvider(getAccessToken);
+		setOrganizationIdProvider(() => typeof window === "undefined" ? null : window.localStorage.getItem(ORGANIZATION_STORAGE_KEY));
 		return () => setAccessTokenProvider(null);
 	}, [getAccessToken]);
 
@@ -20,7 +23,12 @@ function AuthBridge({ children }: { children: React.ReactNode }) {
 		const email = user.email?.address;
 		const name = email?.split("@")[0];
 		syncUser({ email, name })
-			.then(() => queryClient.invalidateQueries())
+			.then((synced) => {
+				if (!window.localStorage.getItem(ORGANIZATION_STORAGE_KEY) && synced.organizationId) {
+					window.localStorage.setItem(ORGANIZATION_STORAGE_KEY, synced.organizationId);
+				}
+				return queryClient.invalidateQueries();
+			})
 			.catch(() => undefined);
 	}, [ready, authenticated, user, queryClient]);
 
