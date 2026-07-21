@@ -40,7 +40,7 @@ describe("TelegramService", () => {
     expect(connections.findOneAndUpdate).toHaveBeenCalledWith(
       { userId: expect.anything() },
       { $set: expect.objectContaining({ chatId: "99", telegramUserId: "42", username: "alex", enabled: true }) },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: "after" },
     );
     expect(http.post).toHaveBeenCalledWith(expect.stringContaining("sendMessage"), expect.objectContaining({ chat_id: "99" }));
   });

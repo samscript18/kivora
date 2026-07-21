@@ -90,7 +90,7 @@ export class TelegramService {
     const connection = await this.connections.findOneAndUpdate(
       { userId: objectUserId },
       { $set: { chatId: pending.chatId, telegramUserId: pending.telegramUserId, username: pending.username, firstName: pending.firstName, chatType: pending.chatType, enabled: true, linkedAt: new Date() } },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: "after" },
     ).lean();
     await this.sendToChat(pending.chatId, "✅ Telegram connected to Kivora. You will now receive live portfolio alerts and can approve revenue actions from this chat.");
     return { connected: true, username: connection?.username, chatType: connection?.chatType };
@@ -102,7 +102,7 @@ export class TelegramService {
   }
 
   async disconnect(userId: string) {
-    const result = await this.connections.findOneAndUpdate({ userId: new Types.ObjectId(userId), enabled: true }, { $set: { enabled: false } }, { new: true }).lean();
+    const result = await this.connections.findOneAndUpdate({ userId: new Types.ObjectId(userId), enabled: true }, { $set: { enabled: false } }, { returnDocument: "after" }).lean();
     if (!result) throw new NotFoundException("No active Telegram connection was found");
     return { connected: false };
   }

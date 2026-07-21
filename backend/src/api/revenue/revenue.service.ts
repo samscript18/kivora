@@ -80,7 +80,7 @@ export class RevenueService {
       }
     }
     for (const incident of found) {
-      const previous = await this.incidents.findOneAndUpdate({ externalId: incident.externalId }, { $set: { listingId: incident.listingId, channel: incident.channel, listing: incident.listing, title: incident.title, cause: incident.cause, severity: incident.severity, revenueAtRisk: incident.revenueAtRisk, confidence: incident.confidence, status: "open", evidence: { location: incident.location, currentRate: incident.currentRate, recommendedRate: incident.recommendedRate, explanation: incident.explanation, factors: incident.factors, canPreview: incident.canPreview, canAutoResolve: incident.canAutoResolve } } }, { upsert: true, new: false }).lean();
+      const previous = await this.incidents.findOneAndUpdate({ externalId: incident.externalId }, { $set: { listingId: incident.listingId, channel: incident.channel, listing: incident.listing, title: incident.title, cause: incident.cause, severity: incident.severity, revenueAtRisk: incident.revenueAtRisk, confidence: incident.confidence, status: "open", evidence: { location: incident.location, currentRate: incident.currentRate, recommendedRate: incident.recommendedRate, explanation: incident.explanation, factors: incident.factors, canPreview: incident.canPreview, canAutoResolve: incident.canAutoResolve } } }, { upsert: true, returnDocument: "before" }).lean();
       if (this.telegram.configured && (!previous || previous.status !== "open")) await this.telegram.notifyIncident(incident);
     }
     await this.incidents.updateMany({ listingId: { $in: [...scannedIds] }, externalId: { $nin: found.map((incident) => incident.externalId) }, status: "open" }, { $set: { status: "resolved" } });
@@ -285,7 +285,7 @@ export class RevenueService {
     const brief = await this.briefs.findById(id).lean();
     if (!brief) throw new NotFoundException("Owner brief not found");
     await this.telegram.sendToUser(userId, `Owner brief for ${brief.owner || brief.listingId}\n\n${brief.subject}\n\n${brief.body}`);
-    return this.briefs.findByIdAndUpdate(id, { $set: { status: "sent", sentAt: new Date() } }, { new: true }).lean();
+    return this.briefs.findByIdAndUpdate(id, { $set: { status: "sent", sentAt: new Date() } }, { returnDocument: "after" }).lean();
   }
 
   async preview(id: string) {

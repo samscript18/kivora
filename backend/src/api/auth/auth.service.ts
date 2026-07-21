@@ -14,7 +14,7 @@ export class AuthService {
     const user = await this.users.findOneAndUpdate(
       { privyUserId },
       { $set: update, $setOnInsert: { privyUserId, name: profile?.name || "Revenue manager", role: "manager" } },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: "after" },
     ).lean();
     return this.serialize(user!);
   }

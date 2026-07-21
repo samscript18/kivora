@@ -66,6 +66,21 @@ function WorkspaceLaunch({ className = "" }: { className?: string }) {
   );
 }
 
+function AuthenticatedLandingRedirect() {
+  const { ready, authenticated } = usePrivy();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (ready && authenticated) router.replace("/dashboard");
+  }, [ready, authenticated, router]);
+
+  return null;
+}
+
+function LandingRedirect() {
+  return configured ? <AuthenticatedLandingRedirect /> : null;
+}
+
 function Launch({ className = "" }: { className?: string }) {
   if (!configured) {
     return (
@@ -1070,6 +1085,7 @@ function FinalCTA() {
 export function Landing() {
   return (
     <main className="landing-page">
+      <LandingRedirect />
       <Navbar />
       <Hero />
       <SignalRail />
