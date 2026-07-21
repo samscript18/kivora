@@ -6,9 +6,10 @@ import { DatabaseModule } from "./database/database.module";
 import { HealthModule } from "./health/health.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
 import { RevenueModule } from "./revenue/revenue.module";
+import { MonitoringModule } from "./monitoring/monitoring.module";
 
 @Module({
-  imports: [ScheduleModule.forRoot(), DatabaseModule, AuthModule, IntegrationsModule, RevenueModule, HealthModule],
+  imports: [ScheduleModule.forRoot(), DatabaseModule, MonitoringModule, AuthModule, IntegrationsModule, RevenueModule, HealthModule],
   controllers: [AppController],
 })
 export class ApiModule {}
