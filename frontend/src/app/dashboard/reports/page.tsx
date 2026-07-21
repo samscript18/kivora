@@ -7,10 +7,13 @@ import {
   generateReport,
   sendBrief,
   getPortfolio,
-  QUERY_KEYS
+  QUERY_KEYS,
+  downloadReport,
+  finalizeReport,
+  deliverReport,
 } from "@/lib/api";
 import { useState } from "react";
-import { FileBarChart, Send, Copy, FileText, Plus } from "lucide-react";
+import { FileBarChart, Send, Copy, FileText, Plus, Download } from "lucide-react";
 import { SourceBadge } from "@/components/ui/SourceBadge";
 import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { SkeletonCard } from "@/components/ui/Skeleton";
@@ -54,6 +57,8 @@ export default function ReportsPage() {
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to deliver brief"),
   });
+  const finalizeMutation = useMutation({ mutationFn: finalizeReport, onSuccess: () => { reportsQuery.refetch(); toast.success("Report finalized"); }, onError: (err) => toast.error(err instanceof Error ? err.message : "Finalization failed") });
+  const deliverMutation = useMutation({ mutationFn: deliverReport, onSuccess: () => { reportsQuery.refetch(); toast.success("Finalized report delivered and tracked"); }, onError: (err) => toast.error(err instanceof Error ? err.message : "Delivery failed") });
 
   const reports: Report[] = reportsQuery.data ?? [];
   const briefs: OwnerBrief[] = briefsQuery.data ?? [];
@@ -106,8 +111,9 @@ export default function ReportsPage() {
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="text-[10px] uppercase font-mono text-slate-500 block mb-1">Report Type</label>
+                <label htmlFor="report-type" className="text-[10px] uppercase font-mono text-slate-500 block mb-1">Report Type</label>
                 <select
+                  id="report-type"
                   value={reportType}
                   onChange={(e) => setReportType(e.target.value as ReportType)}
                   className="w-full rounded-xl border border-border bg-elevated p-3 text-xs text-foreground outline-none focus:border-accent"
@@ -121,8 +127,9 @@ export default function ReportsPage() {
 
               {reportType === "owner" && (
                 <div>
-                  <label className="text-[10px] uppercase font-mono text-slate-500 block mb-1">Target Property</label>
+                  <label htmlFor="report-property" className="text-[10px] uppercase font-mono text-slate-500 block mb-1">Target Property</label>
                   <select
+                    id="report-property"
                     value={selectedListingId}
                     onChange={(e) => setSelectedListingId(e.target.value)}
                     className="w-full rounded-xl border border-border bg-elevated p-3 text-xs text-foreground outline-none focus:border-accent"
@@ -179,6 +186,7 @@ export default function ReportsPage() {
                   <div className="text-[9px] font-mono text-slate-500 pt-2 border-t border-white/5">
                     Grounded in verified live portfolio metrics
                   </div>
+                  <div className="flex gap-2">{item.status === "draft" && <button onClick={() => finalizeMutation.mutate(item._id)} className="rounded-lg bg-accent px-3 py-2 text-[10px] font-semibold text-white">Finalize</button>}{["ready", "shared"].includes(item.status) && <button onClick={()=>deliverMutation.mutate(item._id)} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/20 px-3 py-2 text-[10px] text-emerald-300"><Send size={12}/> Deliver</button>}<button onClick={() => downloadReport(item._id, "pdf").catch((error) => toast.error(error instanceof Error ? error.message : "PDF download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-[10px] font-semibold"><Download size={12}/> PDF</button><button onClick={() => downloadReport(item._id, "csv").catch((error) => toast.error(error instanceof Error ? error.message : "CSV download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-[10px] font-semibold"><Download size={12}/> CSV</button></div>
                 </article>
               ))}
             </div>

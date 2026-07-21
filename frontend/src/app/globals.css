@@ -83,6 +83,14 @@ button { cursor: pointer; }
 button, a { -webkit-tap-highlight-color: transparent; }
 input, textarea, select { font-family: inherit; }
 
+/* The default Tailwind slate-500/600 values do not meet AA on Kivora's dark
+   surfaces at the compact sizes used for operational metadata. */
+.text-slate-500, .text-slate-600 { color: #94a3b8; }
+.text-accent { color: #ff6b52; }
+.bg-accent { background-color: #c93620; }
+.text-white\/30 { color: rgba(255,255,255,.62); }
+.text-white\/38 { color: rgba(255,255,255,.66); }
+
 /* ─── Typography ────────────────────────────────────────────────────────────── */
 .font-display { font-family: var(--font-display); }
 .font-mono    { font-family: var(--font-mono); }
@@ -100,7 +108,7 @@ input, textarea, select { font-family: inherit; }
 
 /* ─── Focus ─────────────────────────────────────────────────────────────────── */
 :focus-visible {
-  outline: 2px solid rgba(232,68,42,0.7);
+  outline: 2px solid #ff806b;
   outline-offset: 2px;
   border-radius: 4px;
 }
