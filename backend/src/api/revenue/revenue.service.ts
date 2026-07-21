@@ -165,7 +165,9 @@ export class RevenueService {
       capabilities: this.capabilities(),
       summary: { health, revenue, atRisk: incidents.reduce((sum, item) => sum + item.revenueAtRisk, 0), opportunities: opportunities.length, occupancy: Number((occupancy * 100).toFixed(1)), criticalIncidents: incidents.filter((item) => item.severity === "Critical").length, marketSignals: signals.length },
       trend, incident: incidents[0] ?? null, opportunities, priorities, signals,
-      activity: activity.length ? activity.map((item: any) => ({ title: item.action.replaceAll("_", " "), meta: item.actor || item.source || "Kivora", time: item.createdAt })) : [{ title: "Live portfolio scan completed", meta: `${this.listingsCache.length} Wheelhouse listings`, time: this.lastScan }],
+      activity: activity.length
+        ? activity.map((item: any) => ({ _id: String(item._id), action: item.action, actor: item.actor || item.source || "Kivora", createdAt: item.createdAt }))
+        : [{ _id: `portfolio-scan-${this.lastScan}`, action: "live_portfolio_scan_completed", actor: `${this.listingsCache.length} connected listings`, createdAt: this.lastScan }],
     };
   }
 
@@ -230,6 +232,7 @@ export class RevenueService {
   }
 
   async applyStrategy(listingId: string, strategy: "conservative" | "balanced" | "aggressive", actor: string) {
+    this.wheelhouse.assertWriteAccess();
     if (!this.listingsCache.length) this.listingsCache = await this.wheelhouse.listings();
     const listing = this.listingsCache.find((item) => item.id === listingId);
     if (!listing) throw new NotFoundException("Listing not found in the connected Wheelhouse portfolio");
@@ -300,6 +303,7 @@ export class RevenueService {
   }
 
   async resolve(id: string, actor: string) {
+    this.wheelhouse.assertWriteAccess();
     const current = this.incidentsCache.find((item) => item.id === id);
     if (!current) throw new NotFoundException("Incident not found");
     if (!current.canAutoResolve) throw new ServiceUnavailableException("This incident cannot be resolved through an automatic pricing mutation");

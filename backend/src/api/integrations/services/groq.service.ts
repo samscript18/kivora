@@ -36,7 +36,7 @@ export class GroqService {
   }
 
   private async complete(system: string, content: string) {
-    if (!this.key) throw new ServiceUnavailableException("Groq is not configured");
+    if (!this.key) throw new ServiceUnavailableException("The revenue assistant is not configured");
     try {
       const response = await firstValueFrom(this.http.post<GroqResponse>(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -51,14 +51,14 @@ export class GroqService {
         { headers: { Authorization: `Bearer ${this.key}`, "Content-Type": "application/json" } },
       ));
       const body = response.data.choices?.[0]?.message?.content?.trim();
-      if (!body) throw new ServiceUnavailableException("Groq returned an empty response");
+      if (!body) throw new ServiceUnavailableException("The revenue assistant returned an empty response");
       return { body, generatedBy: this.model, grounded: true };
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
       const status = (error as AxiosError).response?.status;
-      throw new ServiceUnavailableException(`Groq request failed${status ? ` (${status})` : ""}`);
+      throw new ServiceUnavailableException(`The revenue assistant request failed${status ? ` (${status})` : ""}`);
     }
   }
 
-  capabilities() { return { configured: this.configured, provider: "groq", model: this.model, mode: this.configured ? "live" : "disabled" }; }
+  capabilities() { return { configured: this.configured, mode: this.configured ? "live" : "disabled" }; }
 }

@@ -17,14 +17,26 @@ export type Preferences = Record<string, unknown> & { base_price?: number | null
 export class WheelhouseService {
   private readonly base: string;
   private readonly key?: string;
+  private readonly writesEnabled: boolean;
   private verified=false;
   private writeVerified=false;
+  private readOnlyDetected=false;
   private lastError?:number;
   constructor(private readonly http: HttpService, config: ConfigService) {
     this.base = config.get("WHEELHOUSE_BASE_URL", "https://api.usewheelhouse.com/ss_api/v1");
     this.key = config.get("WHEELHOUSE_API_KEY");
+    this.writesEnabled = String(config.get("WHEELHOUSE_WRITE_ENABLED", "false")).toLowerCase() === "true";
   }
   get configured() { return Boolean(this.key); }
+
+  assertWriteAccess() {
+    if (this.writesEnabled && !this.readOnlyDetected) return;
+    throw new HttpException({
+      code: "WHEELHOUSE_WRITE_ACCESS_REQUIRED",
+      message: "This workspace has read-only pricing access. Live previews remain available, but applying changes requires a write-enabled revenue management API key.",
+      details: { writeAccess: "read_only" },
+    }, 403);
+  }
 
   private async request<T>(method: "GET" | "POST" | "PUT", path: string, data?: unknown): Promise<T> {
     if (!this.key) throw new ServiceUnavailableException("Wheelhouse key is not configured");
@@ -40,8 +52,20 @@ export class WheelhouseService {
         await new Promise(resolve => setTimeout(resolve, Math.min(8000, 1000 * 2 ** attempt + Math.random() * 250)));
       }
     }
-    const status = lastError?.response?.status ?? 502;this.verified=false;this.lastError=status;
+    const status = lastError?.response?.status ?? 502;
     const upstream = lastError?.response?.data;
+    const upstreamText = JSON.stringify(upstream ?? "").toLowerCase();
+    if (status === 403 && upstreamText.includes("read-only")) {
+      this.readOnlyDetected = true;
+      this.lastError = status;
+      throw new HttpException({
+        code: "WHEELHOUSE_WRITE_ACCESS_REQUIRED",
+        message: "This workspace has read-only pricing access. Live previews remain available, but applying changes requires a write-enabled revenue management API key.",
+        details: { writeAccess: "read_only" },
+      }, 403);
+    }
+    if (method === "GET") this.verified=false;
+    this.lastError=status;
     throw new HttpException({ code: "WHEELHOUSE_REQUEST_FAILED", message: "Wheelhouse request failed", upstreamStatus: status, details: upstream }, status);
   }
 
@@ -74,5 +98,20 @@ export class WheelhouseService {
   enableAutomaticPosting(id: string, channel: string) { return this.request<void>("PUT", `/preferences/${encodeURIComponent(id)}/automatic_rate_posting?channel=${encodeURIComponent(channel)}`, { enabled: true }); }
   sync(id: string, channel: string) { return this.request<unknown>("POST", `/listings/${encodeURIComponent(id)}/sync?channel=${encodeURIComponent(channel)}`); }
   marketTimeSeries(marketId: number) { return this.request<unknown>("GET", `/market_report/${marketId}/time_series`); }
-  capabilities() { return { configured:this.configured,connected:this.verified,status:!this.configured?"not_configured":this.verified?"verified":"unverified_or_error",lastError:this.lastError??null,mode:this.verified?"live":"disabled",writeActions:this.writeVerified,writeAccess:this.writeVerified?"verified":"not_yet_verified" }; }
+  capabilities() {
+    const writeAccess = !this.writesEnabled || this.readOnlyDetected
+      ? "read_only"
+      : this.writeVerified
+        ? "verified"
+        : "enabled_unverified";
+    return {
+      configured: this.configured,
+      connected: this.verified,
+      status: !this.configured ? "not_configured" : this.verified ? "verified" : "unverified_or_error",
+      lastError: this.lastError ?? null,
+      mode: this.verified ? "live" : "disabled",
+      writeActions: this.writesEnabled && !this.readOnlyDetected,
+      writeAccess,
+    };
+  }
 }

@@ -11,6 +11,9 @@ export function validateEnvironment(env: Environment) {
   required(env.PRIVY_APP_SECRET, "PRIVY_APP_SECRET", production);
   required(env.WHEELHOUSE_API_KEY, "WHEELHOUSE_API_KEY", production);
   required(env.GROQ_API_KEY, "GROQ_API_KEY", production);
+  if (env.WHEELHOUSE_WRITE_ENABLED && !["true", "false"].includes(env.WHEELHOUSE_WRITE_ENABLED.toLowerCase())) {
+    throw new Error("WHEELHOUSE_WRITE_ENABLED must be true or false");
+  }
   if (production && env.TELEGRAM_BOT_TOKEN) {
     required(env.TELEGRAM_WEBHOOK_SECRET, "TELEGRAM_WEBHOOK_SECRET", true);
     required(env.TELEGRAM_LINK_SECRET, "TELEGRAM_LINK_SECRET", true);
