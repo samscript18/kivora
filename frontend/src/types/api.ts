@@ -303,7 +303,7 @@ export interface Capabilities {
     connected: boolean;
     status: string;
     writeActions: boolean;
-    writeAccess: "read_only" | "enabled_unverified" | "verified";
+    writeAccess: "read_only" | "unverified" | "verified";
     lastError?: number | null;
   };
   marketIntelligence?: Record<string, unknown>;

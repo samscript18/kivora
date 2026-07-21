@@ -8,7 +8,7 @@ Copy `.env.example` to `.env.local` and configure Privy, MongoDB, Wheelhouse, Gr
 
 Privy authentication uses `PRIVY_APP_ID` and `PRIVY_APP_SECRET` through the official Node SDK. No additional verification credential is required or supported.
 
-Wheelhouse keys can be configured as read-only. Keep `WHEELHOUSE_WRITE_ENABLED=false` for those keys: Kivora will continue using live reads and non-mutating pricing previews, but will not offer or attempt preference updates. Set it to `true` only after Wheelhouse grants write access to the key. If an enabled key is rejected upstream as read-only, Kivora immediately downgrades the connection to preview-only mode and returns `WHEELHOUSE_WRITE_ACCESS_REQUIRED` instead of retrying the mutation.
+Wheelhouse does not expose a safe, non-mutating endpoint that declares whether an RM API key can write. Kivora validates the connection with live reads and allows a real action only after normal authentication, approval, and preview checks. The first approved mutation establishes the connection's write capability from the real upstream response. If Wheelhouse rejects it as read-only, Kivora immediately downgrades the connection to preview-only mode and returns `WHEELHOUSE_WRITE_ACCESS_REQUIRED`; it never performs a dummy mutation or reports fake success.
 
 Generate the application-owned secrets locally:
 

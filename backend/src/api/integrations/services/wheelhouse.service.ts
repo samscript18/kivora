@@ -17,7 +17,6 @@ export type Preferences = Record<string, unknown> & { base_price?: number | null
 export class WheelhouseService {
   private readonly base: string;
   private readonly key?: string;
-  private readonly writesEnabled: boolean;
   private verified=false;
   private writeVerified=false;
   private readOnlyDetected=false;
@@ -25,16 +24,17 @@ export class WheelhouseService {
   constructor(private readonly http: HttpService, config: ConfigService) {
     this.base = config.get("WHEELHOUSE_BASE_URL", "https://api.usewheelhouse.com/ss_api/v1");
     this.key = config.get("WHEELHOUSE_API_KEY");
-    this.writesEnabled = String(config.get("WHEELHOUSE_WRITE_ENABLED", "false")).toLowerCase() === "true";
   }
   get configured() { return Boolean(this.key); }
 
   assertWriteAccess() {
-    if (this.writesEnabled && !this.readOnlyDetected) return;
+    if (this.configured && !this.readOnlyDetected) return;
     throw new HttpException({
       code: "WHEELHOUSE_WRITE_ACCESS_REQUIRED",
-      message: "This workspace has read-only pricing access. Live previews remain available, but applying changes requires a write-enabled revenue management API key.",
-      details: { writeAccess: "read_only" },
+      message: this.configured
+        ? "Wheelhouse rejected this connection as read-only. Live previews remain available, but applying changes requires a write-capable API key."
+        : "Connect Wheelhouse before applying revenue changes.",
+      details: { writeAccess: this.configured ? "read_only" : "not_configured" },
     }, 403);
   }
 
@@ -60,7 +60,7 @@ export class WheelhouseService {
       this.lastError = status;
       throw new HttpException({
         code: "WHEELHOUSE_WRITE_ACCESS_REQUIRED",
-        message: "This workspace has read-only pricing access. Live previews remain available, but applying changes requires a write-enabled revenue management API key.",
+        message: "Wheelhouse rejected this connection as read-only. Live previews remain available, but applying changes requires a write-capable API key.",
         details: { writeAccess: "read_only" },
       }, 403);
     }
@@ -99,18 +99,21 @@ export class WheelhouseService {
   sync(id: string, channel: string) { return this.request<unknown>("POST", `/listings/${encodeURIComponent(id)}/sync?channel=${encodeURIComponent(channel)}`); }
   marketTimeSeries(marketId: number) { return this.request<unknown>("GET", `/market_report/${marketId}/time_series`); }
   capabilities() {
-    const writeAccess = !this.writesEnabled || this.readOnlyDetected
+    const writeAccess = this.readOnlyDetected
       ? "read_only"
       : this.writeVerified
         ? "verified"
-        : "enabled_unverified";
+        : "unverified";
     return {
       configured: this.configured,
       connected: this.verified,
       status: !this.configured ? "not_configured" : this.verified ? "verified" : "unverified_or_error",
       lastError: this.lastError ?? null,
       mode: this.verified ? "live" : "disabled",
-      writeActions: this.writesEnabled && !this.readOnlyDetected,
+      // Wheelhouse does not expose a non-mutating API-key scope endpoint. A
+      // configured connection may attempt an explicitly approved live action;
+      // the real upstream response establishes write capability.
+      writeActions: this.configured && !this.readOnlyDetected,
       writeAccess,
     };
   }
