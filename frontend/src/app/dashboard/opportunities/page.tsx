@@ -1,16 +1,16 @@
 "use client";
 
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { getOpportunities, previewIncident, QUERY_KEYS } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { getOpportunities, QUERY_KEYS } from "@/lib/api";
 import { TrendingUp, Zap, Filter } from "lucide-react";
 import { SourceBadge } from "@/components/ui/SourceBadge";
 import { ConfidenceIndicator } from "@/components/ui/ConfidenceIndicator";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { SkeletonCard } from "@/components/ui/Skeleton";
-import { toast } from "sonner";
 import { useState } from "react";
 import type { Opportunity } from "@/types/api";
+import { WorkItemWorkspace } from "@/components/dashboard/WorkItemWorkspace";
 
 const money = (value: number | undefined) =>
   new Intl.NumberFormat("en-US", {
@@ -21,22 +21,11 @@ const money = (value: number | undefined) =>
 
 export default function OpportunitiesPage() {
   const [filterTag, setFilterTag] = useState<string>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: QUERY_KEYS.opportunities,
     queryFn: getOpportunities,
-  });
-
-  const previewMutation = useMutation({
-    mutationFn: (id: string) => previewIncident(id),
-    onSuccess: (result) => {
-      toast.success("Live Strategy Preview Completed", {
-        description: `Projected recovery: ${money(result.projectedRecovery)}. Optimized revenue: ${money(result.optimizedRevenue)}.`,
-      });
-    },
-    onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Preview failed");
-    },
   });
 
   const opportunities: Opportunity[] = data ?? [];
@@ -165,12 +154,11 @@ export default function OpportunitiesPage() {
 
                 {item.canPreview !== false && item.id ? (
                   <button
-                    disabled={previewMutation.isPending}
-                    onClick={() => previewMutation.mutate(item.id!)}
+                    onClick={() => setSelectedId(item.id!)}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-xs font-bold text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
                   >
                     <Zap size={13} />
-                    {previewMutation.isPending ? "Simulating..." : "Live Preview"}
+                    Investigate & Preview
                   </button>
                 ) : (
                   <span className="text-xs font-semibold text-slate-500">
@@ -182,6 +170,7 @@ export default function OpportunitiesPage() {
           ))}
         </div>
       )}
+      {selectedId && <WorkItemWorkspace kind="opportunity" id={selectedId} onClose={() => setSelectedId(null)} />}
     </div>
   );
 }

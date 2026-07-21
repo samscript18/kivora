@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getCapabilities, getPortfolio, getStrategies, applyStrategy, QUERY_KEYS } from "@/lib/api";
+import { getCapabilities, getListingWorkspace, getPortfolio, getStrategies, applyStrategy, QUERY_KEYS } from "@/lib/api";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
@@ -22,6 +22,7 @@ import { ErrorState, EmptyState } from "@/components/ui/EmptyState";
 import { ActionConfirmDialog } from "@/components/ui/ActionConfirmDialog";
 import { toast } from "sonner";
 import type { Listing } from "@/types/api";
+import {WorkItemWorkspace}from"@/components/dashboard/WorkItemWorkspace";
 
 const money = (value: number | undefined) =>
   new Intl.NumberFormat("en-US", {
@@ -38,9 +39,11 @@ export default function ListingDetailPage() {
   const listingId = decodeURIComponent(String(params.id || ""));
   const qc = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<"audit" | "simulator" | "comps">("audit");
+  const [activeTab, setActiveTab] = useState<"audit" | "simulator" | "comps" | "operations">("audit");
+  const[selectedWork,setSelectedWork]=useState<{kind:"incident"|"opportunity";id:string}|null>(null);
   const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [renderedAt]=useState(()=>Date.now());
 
   // Load portfolio to get listing details
   const portfolioQuery = useQuery({
@@ -53,7 +56,9 @@ export default function ListingDetailPage() {
     queryFn: getCapabilities,
     staleTime: 60_000,
   });
-  const canWrite = capabilitiesQuery.data?.wheelhouse.writeActions === true;
+  const workspaceQuery=useQuery({queryKey:["listing-workspace",listingId],queryFn:()=>getListingWorkspace(listingId),enabled:Boolean(listingId)});
+  const syncFresh=workspaceQuery.data?.capabilities?.lastSynchronizedAt&&renderedAt-new Date(workspaceQuery.data.capabilities.lastSynchronizedAt).getTime()<6*60*60_000;
+  const canWrite = capabilitiesQuery.data?.wheelhouse.writeActions === true&&workspaceQuery.data?.capabilities?.writeActions===true&&workspaceQuery.data?.capabilities?.canApprove===true&&workspaceQuery.data?.capabilities?.listingActive===true&&Boolean(syncFresh);
 
   // Load strategies for simulator tab
   const strategiesQuery = useQuery({
@@ -194,6 +199,7 @@ export default function ListingDetailPage() {
           tone="neutral"
         />
       </div>
+      {workspaceQuery.data&&<section className="card rounded-2xl p-5"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Info label="Portfolio" value={workspaceQuery.data.listing.portfolio?.name||"Unassigned"}/><Info label="Connection" value={`${workspaceQuery.data.listing.connection?.displayName||"Unknown"} · ${workspaceQuery.data.listing.connection?.status||"unknown"}`}/><Info label="Last synchronized" value={workspaceQuery.data.listing.lastSynchronizedAt?new Date(workspaceQuery.data.listing.lastSynchronizedAt).toLocaleString():"Not recorded"}/><Info label="Property profiles" value={(workspaceQuery.data.listing.propertyProfiles||[]).join(", ")||"Not configured"}/></div></section>}
 
       {/* Navigation Tabs */}
       <div className="flex border-b border-border gap-6 text-xs font-semibold">
@@ -201,6 +207,7 @@ export default function ListingDetailPage() {
           { id: "audit", label: "Audit & Diagnostics", icon: Bot },
           { id: "simulator", label: "Strategy Simulator", icon: Zap },
           { id: "comps", label: "Market & Comps Comparison", icon: TrendingUp },
+          { id: "operations", label: "Intelligence & Actions", icon: AlertTriangle },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -278,6 +285,7 @@ export default function ListingDetailPage() {
           </section>
         </div>
       )}
+      {activeTab==="operations"&&<div className="space-y-5">{workspaceQuery.isLoading?<div className="card rounded-2xl p-6 text-xs text-slate-500">Loading organization-scoped intelligence…</div>:workspaceQuery.error?<ErrorState error={workspaceQuery.error} onRetry={()=>workspaceQuery.refetch()}/>:workspaceQuery.data&&<><section className="grid gap-4 md:grid-cols-2"><OperationalList title="Active incidents" empty="No active incidents for this listing." items={(workspaceQuery.data.intelligence.incidents||[]).filter((x:any)=>x.status==="open")} open={(item:any)=>setSelectedWork({kind:"incident",id:item.externalId||item.id})}/><OperationalList title="Active opportunities" empty="No active opportunities currently meet deterministic evidence thresholds." items={(workspaceQuery.data.intelligence.opportunities||[]).filter((x:any)=>["open","under_review","approved"].includes(x.status))} open={(item:any)=>setSelectedWork({kind:"opportunity",id:item.id})}/></section><section className="card rounded-2xl p-5"><h3 className="text-sm font-bold">Live pricing state</h3><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Info label="Base price" value={money(workspaceQuery.data.pricing.preferences?.base_price)}/><Info label="Automatic pricing" value={workspaceQuery.data.pricing.preferences?.dynamic_pricing_enabled===false?"Disabled":"Enabled"}/><Info label="Rate posting" value={workspaceQuery.data.pricing.preferences?.automatic_rate_posting_enabled===false?"Disabled":"Enabled"}/><Info label="Minimum stay" value={workspaceQuery.data.pricing.preferences?.minimum_stay||workspaceQuery.data.pricing.preferences?.min_stay||"Unavailable"}/></div><RecordList title="Recent pricing changes" empty="No recent Wheelhouse pricing changes were returned." items={workspaceQuery.data.pricing.recentChanges?.data||workspaceQuery.data.pricing.recentChanges||[]}/></section><section className="grid gap-4 lg:grid-cols-2"><StatusList title="Revenue actions and verification" empty="No revenue action has been executed for this listing." items={workspaceQuery.data.operations.actions||[]}/><StatusList title="Measured outcomes" empty="No completed measurement window is available yet." items={workspaceQuery.data.operations.outcomes||[]}/><StatusList title="Event and weather signals" empty="No active market signal affects this listing." items={workspaceQuery.data.intelligence.signals||[]}/><StatusList title="Activity and reports" empty="No listing activity has been recorded." items={[...(workspaceQuery.data.operations.activity||[]),...(workspaceQuery.data.operations.reports||[])]}/></section></>}</div>}
 
       {/* Tab 2: Simulator */}
       {activeTab === "simulator" && (
@@ -347,7 +355,7 @@ export default function ListingDetailPage() {
                     )}
                     {strat.available && !canWrite && (
                       <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-center text-[10px] leading-4 text-amber-300">
-                        Preview only · write access required to apply
+                        Preview only · requires a write-capable connection, manager permission, an active listing, and synchronization within six hours
                       </div>
                     )}
                   </div>
@@ -407,6 +415,12 @@ export default function ListingDetailPage() {
           </div>
         }
       />
-    </div>
+      {selectedWork&&<WorkItemWorkspace kind={selectedWork.kind} id={selectedWork.id} onClose={()=>setSelectedWork(null)}/>}</div>
   );
 }
+
+function Info({label,value}:{label:string;value:string}){return <div className="rounded-xl border border-border bg-elevated p-3"><div className="text-[9px] uppercase text-slate-500">{label}</div><div className="mt-1 text-xs font-semibold">{value}</div></div>}
+function OperationalList({title,empty,items,open}:{title:string;empty:string;items:any[];open:(v:any)=>void}){return <section className="card rounded-2xl p-5"><h3 className="text-sm font-bold">{title}</h3>{items.length?<div className="mt-3 space-y-2">{items.map(item=><button key={item.id||item._id} onClick={()=>open(item)} className="w-full rounded-xl border border-border bg-elevated p-3 text-left"><div className="text-xs font-semibold">{item.title||String(item.type).replaceAll("_"," ")}</div><div className="mt-1 text-[10px] text-slate-500">{item.status} · {item.confidence||0}% confidence · Open evidence and decision workspace</div></button>)}</div>:<p className="mt-3 text-xs text-slate-500">{empty}</p>}</section>}
+function StatusList({title,empty,items}:{title:string;empty:string;items:any[]}){return <section className="card rounded-2xl p-5"><h3 className="text-sm font-bold">{title}</h3>{items.length?<div className="mt-3 max-h-80 space-y-2 overflow-auto">{items.slice(0,30).map((item,index)=><div key={item.id||item._id||index} className="rounded-xl border border-border bg-elevated p-3"><div className="flex items-start gap-2"><span className="min-w-0 flex-1 text-xs font-semibold">{item.title||item.actionType||item.type||item.action||"Recorded item"}</span><span className="text-[9px] font-bold uppercase text-slate-500">{item.status||item.deliveryStatus||"recorded"}</span></div><p className="mt-1 text-[10px] text-slate-500">{statusDetail(item)}</p>{(item.createdAt||item.calculatedAt)&&<p className="mt-1 text-[9px] text-slate-600">{new Date(item.createdAt||item.calculatedAt).toLocaleString()}</p>}</div>)}</div>:<p className="mt-3 text-xs text-slate-500">{empty}</p>}</section>}
+function statusDetail(item:any){if(item.message)return item.message;if(item.errorDetails?.reason)return item.errorDetails.reason;if(item.verificationResult?.matched===true)return"Wheelhouse state verified";if(item.verificationResult?.matched===false)return"Verification did not match";return"Stored in the organization activity history";}
+function RecordList({title,empty,items}:{title:string;empty:string;items:any}){const rows=Array.isArray(items)?items:[];return <div className="mt-5"><h4 className="text-xs font-bold">{title}</h4>{rows.length?<div className="mt-2 grid gap-2 sm:grid-cols-2">{rows.slice(0,12).map((item:any,index:number)=><div key={item.id||item.stay_date||index} className="rounded-lg border border-border bg-elevated p-3 text-[10px] text-slate-400">{item.stay_date||item.date||item.created_at||"Pricing record"} · {item.price!=null?money(item.price):item.action||item.change||"Updated"}</div>)}</div>:<p className="mt-2 text-xs text-slate-500">{empty}</p>}</div>}

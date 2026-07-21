@@ -20,6 +20,11 @@ import type {
   TelegramLinkResult,
   TelegramStatus,
   UnderwriteResult,
+  WheelhouseConnection,
+  OrganizationMembers,
+  OrganizationRole,
+  WorkItem,
+  ManagedPortfolio,
 } from "@/types/api";
 
 // ─── Query keys ──────────────────────────────────────────────────────────────
@@ -36,6 +41,8 @@ export const QUERY_KEYS = {
   briefs: ["briefs"] as const,
   telegramStatus: ["telegram-status"] as const,
   organizations: ["organizations"] as const,
+  wheelhouseConnections: ["wheelhouse-connections"] as const,
+  members: ["organization-members"] as const,
   strategies: (listingId: string) => ["strategies", listingId] as const,
 } as const;
 
@@ -136,6 +143,13 @@ export const getDashboard = async () => {
 
 export const getPortfolio = () =>
   unwrap(api.get<Envelope<PortfolioData>>("/portfolio"));
+export const getListingWorkspace=(id:string)=>unwrap(api.get<Envelope<Record<string,any>>>(`/listings/${encodeURIComponent(id)}/workspace`));
+export const getIntegrationSettings=()=>unwrap(api.get<Envelope<Array<Record<string,any>>>>("/integration-settings"));
+export const updateIntegrationSettings=(provider:string,input:Record<string,unknown>)=>unwrap(api.patch<Envelope<Record<string,any>>>(`/integration-settings/${provider}`,input));
+export const testIntegrationSettings=(provider:string)=>unwrap(api.post<Envelope<Record<string,any>>>(`/integration-settings/${provider}/test`));
+export const revokeIntegrationCredential=(provider:string)=>unwrap(api.delete<Envelope<Record<string,any>>>(`/integration-settings/${provider}/credential`));
+export const getNotificationPreferences=()=>unwrap(api.get<Envelope<Record<string,any>>>("/integration-settings/notifications/preferences"));
+export const saveNotificationPreferences=(scope:"organization"|"user"|"portfolio",input:Record<string,unknown>)=>unwrap(api.patch<Envelope<Record<string,any>>>(`/integration-settings/notifications/preferences/${scope}`,input));
 
 export const getIncidents = () =>
   unwrap(api.get<Envelope<Incident[]>>("/incidents"));
@@ -182,6 +196,25 @@ export const syncUser = (profile: { email?: string; name?: string }) =>
 export const getOrganizations = () =>
   unwrap(api.get<Envelope<OrganizationSummary[]>>("/auth/organizations"));
 
+export const createOrganization = (input: { name: string; defaultCurrency?: string; defaultTimezone?: string }) =>
+  unwrap(api.post<Envelope<OrganizationSummary>>("/auth/organizations", input));
+export const updateOrganization = (input: { name?: string; defaultCurrency?: string; defaultTimezone?: string }) =>
+  unwrap(api.patch<Envelope<OrganizationSummary>>("/auth/organizations/current", input));
+export const setDefaultOrganization = () => unwrap(api.post<Envelope<{ organizationId: string; default: true }>>("/auth/organizations/current/default"));
+export const getOrganizationMembers = () => unwrap(api.get<Envelope<OrganizationMembers>>("/auth/organizations/current/members"));
+export const inviteOrganizationMember = (input: { email: string; role: Exclude<OrganizationRole, "owner"> }) => unwrap(api.post<Envelope<{ id: string; email: string; role: OrganizationRole; token: string; expiresAt: string }>>("/auth/organizations/current/invitations", input));
+export const updateOrganizationMember = (id: string, input: { role?: Exclude<OrganizationRole, "owner">; status?: "active" | "suspended" | "removed" }) => unwrap(api.patch<Envelope<unknown>>(`/auth/organizations/current/members/${id}`, input));
+
+export const getWheelhouseConnections = () => unwrap(api.get<Envelope<WheelhouseConnection[]>>("/wheelhouse-connections"));
+export const createWheelhouseConnection = (input: { displayName: string; credential: string }) => unwrap(api.post<Envelope<WheelhouseConnection>>("/wheelhouse-connections", input));
+export const testWheelhouseConnection = (id: string) => unwrap(api.post<Envelope<{ connected: true; listingCount: number; capabilities: Record<string, unknown> }>>(`/wheelhouse-connections/${id}/test`));
+export const replaceWheelhouseCredential = (id: string, credential: string) => unwrap(api.patch<Envelope<WheelhouseConnection>>(`/wheelhouse-connections/${id}/credential`, { credential }));
+export const revokeWheelhouseConnection = (id: string) => unwrap(api.delete<Envelope<{ id: string; status: "revoked" }>>(`/wheelhouse-connections/${id}`));
+export const getManagedPortfolios = () => unwrap(api.get<Envelope<ManagedPortfolio[]>>("/portfolios"));
+export const createManagedPortfolio = (input: { connectionId: string; name: string; description?: string; defaultCurrency?: string; timezone?: string }) => unwrap(api.post<Envelope<ManagedPortfolio>>("/portfolios", input));
+export const archiveManagedPortfolio = (id: string) => unwrap(api.delete<Envelope<unknown>>(`/portfolios/${id}`));
+export const moveListingMapping = (mappingId: string, portfolioId: string) => unwrap(api.post<Envelope<unknown>>(`/portfolios/listings/${mappingId}/move`, { portfolioId }));
+
 export const connectTelegram = (intent: string, signature: string) =>
   unwrap(api.post<Envelope<{ connected: true }>>("/telegram/connect", { intent, signature }));
 
@@ -209,6 +242,16 @@ export const applyStrategy = (listingId: string, strategy: string) =>
 export const getReports = () =>
   unwrap(api.get<Envelope<Report[]>>("/reports"));
 
+export const downloadReport = async (id: string, format: "pdf" | "csv") => {
+  const response = await api.get<Blob>(`/reports/${id}/export/${format}`, { responseType: "blob" });
+  const disposition = String(response.headers["content-disposition"] || "");
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] || `kivora-report.${format}`;
+  const url = URL.createObjectURL(response.data); const link = document.createElement("a"); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url);
+};
+export const finalizeReport = (id: string) => unwrap(api.post<Envelope<Report>>(`/reports/${id}/finalize`));
+export const deliverReport = (id: string) => unwrap(api.post<Envelope<unknown>>(`/reports/${id}/deliver`));
+export const editReport = (id: string, body: string) => unwrap(api.post<Envelope<Report>>(`/reports/${id}/edit`, { body }));
+
 export const generateExecutiveReport = () =>
   unwrap(api.post<Envelope<Report>>("/reports/executive"));
 
@@ -229,3 +272,19 @@ export const askKivora = (question: string) =>
 
 export const getSegments = () =>
   unwrap(api.get<Envelope<SegmentsData>>("/segments"));
+
+export const getWorkItem = (kind: "incident" | "opportunity", id: string) =>
+  unwrap(api.get<Envelope<WorkItem>>(`/work-items/${kind}/${id}`));
+export const decideRecommendation = (id: string, decision: string, reason?: string, until?: string) =>
+  unwrap(api.post<Envelope<unknown>>(`/recommendations/${id}/decision`, { decision, reason, until }));
+export const simulateRecommendation = (id: string) =>
+  unwrap(api.post<Envelope<StrategiesData>>(`/recommendations/${id}/simulations`));
+export const executeRecommendation = (id: string, simulationId: string) =>
+  unwrap(api.post<Envelope<Record<string, unknown>>>(`/recommendations/${id}/execute`, { simulationId }));
+export const scheduleRecommendation = (id: string, executeAt: string, reason?: string, simulationId?: string) =>
+  unwrap(api.post<Envelope<unknown>>(`/recommendations/${id}/schedule`, { executeAt, reason, simulationId }));
+export const assignWorkItem = (kind: "incident" | "opportunity", id: string, userId?: string) =>
+  unwrap(api.post<Envelope<unknown>>(`/work-items/${kind}/${id}/assign`, { userId }));
+export const commentOnWorkItem = (kind: "incident" | "opportunity", id: string, body: string) =>
+  unwrap(api.post<Envelope<unknown>>(`/work-items/${kind}/${id}/comments`, { body }));
+export const revertRevenueAction = (id: string) => unwrap(api.post<Envelope<Record<string, unknown>>>(`/revenue-actions/${id}/revert`));

@@ -42,6 +42,29 @@ export interface AuthUser {
   organizationId: string;
   organizationRole: OrganizationRole;
 }
+export interface WheelhouseConnection {
+  id: string;
+  displayName: string;
+  status: "connected" | "degraded" | "revoked" | "reauthorization_required";
+  readCapability: boolean;
+  writeCapability: boolean;
+  supportedMutationTypes: string[];
+  lastSuccessfulSynchronization?: string;
+  lastFailedSynchronization?: string;
+  lastError?: string;
+  capabilities?: Record<string, unknown>;
+}
+export interface ManagedPortfolio { id: string; connectionId: string; name: string; description?: string; defaultCurrency: string; timezone: string; status: string; listingCount?: number; }
+export interface OrganizationMember {
+  id: string;
+  userId: string;
+  role: OrganizationRole;
+  status: "active" | "suspended" | "removed";
+  joinedAt?: string;
+  user?: { name: string; email?: string; timezone?: string };
+}
+export interface OrganizationInvitation { id: string; email: string; role: OrganizationRole; status: string; expiresAt: string; }
+export interface OrganizationMembers { members: OrganizationMember[]; invitations: OrganizationInvitation[]; }
 
 // ─── Listing ─────────────────────────────────────────────────────────────────
 export interface ListingLocation {
@@ -87,6 +110,15 @@ export interface DashboardSummary {
   occupancy: number;
   criticalIncidents: number;
   marketSignals: number;
+  projectedOpportunity?: number;
+  activeRecommendations?: number;
+  awaitingApproval?: number;
+  scheduledActions?: number;
+  verificationFailures?: number;
+  revenueProtected?: number;
+  realizedRevenue?: number;
+  timeSavedMinutes?: number;
+  healthDetails?: Record<string, unknown>;
 }
 
 export interface RevenueTrend {
@@ -104,6 +136,7 @@ export interface Priority {
   impact: number;
   confidence: number;
   type?: string;
+  kind?: "incident" | "opportunity" | "event" | "weather";
   severity?: IncidentSeverity;
   forecastPeriod?: string;
   cause?: string;
@@ -221,6 +254,22 @@ export interface StrategiesData {
   listingId: string;
   listing?: string;
   strategies: Strategy[];
+}
+
+export interface Recommendation {
+  id?: string; _id: string; title: string; explanation: string; proposedAction: string;
+  estimatedImpact: number; currency: string; confidence: number; risks?: string;
+  status: string; expiresAt: string; affectedDates?: string[]; impactCalculation?: Record<string, unknown>;
+}
+export interface PersistedSimulation {
+  id?: string; _id?: string; selectedStrategy: string; baselineState: Record<string, unknown>;
+  previewResponse: Record<string, unknown>; calculatedProjections: Record<string, unknown>; expiresAt: string;
+}
+export interface WorkItem {
+  kind: "incident" | "opportunity"; entity: Record<string, any>; recommendation: Recommendation | null;
+  simulations: PersistedSimulation[]; actions: Array<Record<string, any>>; outcomes: Array<Record<string, any>>;
+  activity: ActivityEntry[]; comments: Array<Record<string, any>>; signals: Array<Record<string, any>>;
+  capabilities?: {canApprove:boolean;canExecute:boolean;simulationFresh:boolean;recommendationFresh:boolean;writeAccess:string};
 }
 
 // ─── Reports ─────────────────────────────────────────────────────────────────

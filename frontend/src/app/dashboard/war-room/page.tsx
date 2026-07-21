@@ -42,6 +42,7 @@ import { SourceBadge } from "@/components/ui/SourceBadge";
 import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { SkeletonMetricCard, SkeletonPriorityRow } from "@/components/ui/Skeleton";
 import type { Incident, Priority } from "@/types/api";
+import { WorkItemWorkspace } from "@/components/dashboard/WorkItemWorkspace";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
@@ -65,8 +66,8 @@ function PriorityCard({
   const severity = (priority.severity ?? (rank === 1 ? "critical" : rank <= 3 ? "high" : "medium")) as "critical" | "high" | "medium" | "low";
   return (
     <motion.div
-      initial={{ opacity: 0, x: -8 }}
-      animate={{ opacity: 1, x: 0 }}
+      initial={{ x: -8 }}
+      animate={{ x: 0 }}
       transition={{ delay: rank * 0.05 }}
       className="group flex items-start gap-4 border-b border-white/6 p-4 last:border-b-0 hover:bg-white/[0.02] transition-colors"
     >
@@ -100,7 +101,7 @@ function PriorityCard({
       {/* Action */}
       <button
         onClick={onInvestigate}
-        className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-white/5 hover:text-foreground transition-all"
+        className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/5 hover:text-foreground transition-all"
         aria-label={`Investigate ${priority.title}`}
       >
         Investigate <ArrowRight size={12} />
@@ -527,6 +528,7 @@ export default function WarRoomPage() {
 
   const [drawerIncident, setDrawerIncident] = useState<Incident | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [workItem, setWorkItem] = useState<{ kind: "incident" | "opportunity"; id: string } | null>(null);
 
   function openIncident(incident: Incident) {
     setDrawerIncident(incident);
@@ -617,8 +619,9 @@ export default function WarRoomPage() {
                   priority={p}
                   rank={i + 1}
                   onInvestigate={() => {
+                    if (p.kind === "opportunity" || p.type === "opportunity") { setWorkItem({ kind: "opportunity", id: p.id }); return; }
                     const matched = incidentData?.find((inc) => inc.id === p.id || inc.listingId === p.id);
-                    if (matched) openIncident(matched);
+                    if (matched) setWorkItem({ kind: "incident", id: matched.id });
                     else if (data.incident) openIncident(data.incident);
                   }}
                 />
@@ -738,6 +741,7 @@ export default function WarRoomPage() {
           canWrite={data?.capabilities?.wheelhouse?.writeActions === true}
         />
       )}
+      {workItem && <WorkItemWorkspace kind={workItem.kind} id={workItem.id} onClose={() => setWorkItem(null)} />}
     </>
   );
 }
