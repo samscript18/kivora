@@ -10,10 +10,12 @@ type GroqResponse = { choices?: Array<{ message?: { content?: string } }> };
 export class GroqService {
   private readonly key?: string;
   private readonly model: string;
+  private readonly base:string;
 
   constructor(private readonly http: HttpService, config: ConfigService) {
     this.key = config.get<string>("GROQ_API_KEY");
     this.model = config.get<string>("GROQ_MODEL", "llama-3.3-70b-versatile");
+    this.base=config.get<string>("GROQ_BASE_URL","https://api.groq.com");
   }
 
   get configured() { return Boolean(this.key); }
@@ -47,7 +49,7 @@ export class GroqService {
     if (!this.key) throw new ServiceUnavailableException("The revenue assistant is not configured");
     try {
       const response = await firstValueFrom(this.http.post<GroqResponse>(
-        "https://api.groq.com/openai/v1/chat/completions",
+        `${this.base}/openai/v1/chat/completions`,
         {
           model: this.model,
           temperature: 0.2,
