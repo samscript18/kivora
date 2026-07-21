@@ -1,3 +1,4 @@
-import { Prop,Schema,SchemaFactory } from "@nestjs/mongoose";import { HydratedDocument } from "mongoose";
-@Schema({timestamps:true,bufferCommands:false}) export class AuditLog{@Prop({required:true,index:true}) action:string;@Prop({index:true}) incidentId:string;@Prop() actor:string;@Prop({type:Object}) before:Record<string,unknown>;@Prop({type:Object}) after:Record<string,unknown>;@Prop() projectedImpact:number;@Prop() source:string;@Prop({default:true}) verified:boolean}
+import { Prop,Schema,SchemaFactory } from "@nestjs/mongoose";import { HydratedDocument, Types } from "mongoose";
+@Schema({timestamps:true,bufferCommands:false}) export class AuditLog{@Prop({type:Types.ObjectId,index:true}) organizationId:Types.ObjectId;@Prop({type:Types.ObjectId,index:true}) actorUserId?:Types.ObjectId;@Prop({required:true,index:true}) action:string;@Prop({index:true}) incidentId:string;@Prop() actor:string;@Prop() entityType?:string;@Prop() entityId?:string;@Prop() requestId?:string;@Prop({type:Object}) before:Record<string,unknown>;@Prop({type:Object}) after:Record<string,unknown>;@Prop() projectedImpact:number;@Prop() source:string;@Prop({default:true}) verified:boolean}
 export type AuditLogDocument=HydratedDocument<AuditLog>;export const AuditLogSchema=SchemaFactory.createForClass(AuditLog);
+AuditLogSchema.index({organizationId:1,createdAt:-1});

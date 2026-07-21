@@ -13,3 +13,4 @@ export class ReportDto {
   @IsIn(["executive", "portfolio", "owner", "revenue"]) type!: "executive" | "portfolio" | "owner" | "revenue";
   @IsOptional() @IsString() listingId?: string;
 }
+export class EditReportDto { @IsString() @IsNotEmpty() @MaxLength(50_000) body!: string; }

@@ -1,8 +1,11 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Types } from "mongoose";
 
 @Schema({ timestamps: true, bufferCommands: false })
 export class MarketSignal {
-  @Prop({ required: true, unique: true, index: true }) externalId!: string;
+  @Prop({ type: Types.ObjectId, index: true }) organizationId!: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, index: true }) portfolioId?: Types.ObjectId;
+  @Prop({ required: true, index: true }) externalId!: string;
   @Prop({ required: true, enum: ["event", "weather"], index: true }) kind!: "event" | "weather";
   @Prop({ required: true }) title!: string;
   @Prop() description?: string;
@@ -22,4 +25,5 @@ export class MarketSignal {
 }
 
 export const MarketSignalSchema = SchemaFactory.createForClass(MarketSignal);
-MarketSignalSchema.index({ kind: 1, startsAt: 1 });
+MarketSignalSchema.index({ organizationId: 1, externalId: 1 }, { unique: true });
+MarketSignalSchema.index({ organizationId: 1, kind: 1, startsAt: 1 });

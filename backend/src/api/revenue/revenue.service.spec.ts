@@ -6,7 +6,7 @@ describe("RevenueService audit rules", () => {
     preferences: jest.fn(), recommendations: jest.fn(), kpis: jest.fn(),
     recentChanges: jest.fn(), flags: jest.fn(),
   };
-  const snapshots = { create: jest.fn().mockResolvedValue({}) };
+  const snapshots = { create: jest.fn().mockResolvedValue({}), findOne: jest.fn().mockReturnValue({ sort: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }) }) };
   const groq = { answer: jest.fn() };
   const service = new RevenueService(
     wheelhouse as never,
