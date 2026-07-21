@@ -29,6 +29,7 @@ import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { ActionConfirmDialog } from "@/components/ui/ActionConfirmDialog";
 import { toast } from "sonner";
 import type { PortfolioSegment } from "@/types/api";
+import { ExternalIntelligencePanel, NotificationPreferencesPanel, PortfolioSettingsPanel, TeamSettingsPanel, WheelhouseConnectionsPanel, WorkspaceSettingsPanel } from "@/components/dashboard/OperationsSettings";
 
 const money = (value: number | undefined) =>
   new Intl.NumberFormat("en-US", {
@@ -38,7 +39,7 @@ const money = (value: number | undefined) =>
   }).format(value ?? 0);
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<"integrations" | "segments" | "underwrite">("integrations");
+  const [activeTab, setActiveTab] = useState<"integrations" | "intelligence" | "notifications" | "workspace" | "team" | "portfolios" | "segments" | "underwrite">("integrations");
   const [disconnectConfirm, setDisconnectConfirm] = useState(false);
 
   // Underwrite Form state
@@ -93,7 +94,6 @@ export default function SettingsPage() {
 
   const telegramData = telegramStatusQuery.data;
   const capabilities = capabilitiesQuery.data;
-  const pricing = capabilities?.wheelhouse;
   const eventIntelligence = capabilities?.marketIntelligence?.ticketmaster;
   const weatherIntelligence = capabilities?.marketIntelligence?.openweather;
   const segments: PortfolioSegment[] = segmentsQuery.data?.segments ?? [];
@@ -126,6 +126,11 @@ export default function SettingsPage() {
         >
           <Zap size={15} /> Integrations & Mobile Bot
         </button>
+        <button onClick={() => setActiveTab("workspace")} className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "workspace" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><ShieldCheck size={15}/> Organization</button>
+        <button onClick={() => setActiveTab("team")} className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "team" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Team</button>
+        <button onClick={() => setActiveTab("portfolios")} className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "portfolios" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Portfolios</button>
+        <button onClick={() => setActiveTab("intelligence")} className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "intelligence" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Sparkles size={15}/> Intelligence</button>
+        <button onClick={() => setActiveTab("notifications")} className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "notifications" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><MessageCircle size={15}/> Notifications</button>
         <button
           onClick={() => setActiveTab("segments")}
           className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${
@@ -147,33 +152,7 @@ export default function SettingsPage() {
       {/* Integrations Tab */}
       {activeTab === "integrations" && (
         <div className="grid gap-4 md:grid-cols-2">
-          {/* Wheelhouse Card */}
-          <article className="card rounded-2xl p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-500/10 text-indigo-400">
-                  <Zap size={20} />
-                </span>
-                <div>
-                  <h3 className="font-bold text-foreground text-sm">Pricing Intelligence</h3>
-                  <p className="text-[11px] text-slate-500">Core pricing and portfolio synchronization</p>
-                </div>
-              </div>
-              <StatusBadge
-                variant={pricing?.connected ? "healthy" : pricing?.configured ? "pending" : "disconnected"}
-                label={pricing?.connected ? "CONNECTED" : pricing?.configured ? "VERIFYING" : "NOT CONNECTED"}
-              />
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Provides live portfolio, listing, pricing, calendar, booking pace, ADR, RevPAR, and dynamic pricing rules.
-            </p>
-            {pricing?.configured && (
-              <div className="rounded-xl border border-border bg-elevated px-4 py-3 text-[11px] text-slate-400">
-                Action access: <span className="font-semibold text-foreground">{pricing.writeAccess === "verified" ? "write verified" : pricing.writeAccess === "read_only" ? "read-only" : "verified by the first approved live action"}</span>
-              </div>
-            )}
-          </article>
-
+          <WheelhouseConnectionsPanel />
           {/* Telegram Mobile Companion */}
           <article className="card rounded-2xl p-6 space-y-4">
             <div className="flex items-start justify-between">
@@ -274,6 +253,12 @@ export default function SettingsPage() {
           </article>
         </div>
       )}
+      {activeTab === "portfolios" && <PortfolioSettingsPanel />}
+      {activeTab === "intelligence" && <ExternalIntelligencePanel />}
+      {activeTab === "notifications" && <NotificationPreferencesPanel />}
+
+      {activeTab === "workspace" && <WorkspaceSettingsPanel />}
+      {activeTab === "team" && <TeamSettingsPanel />}
 
       {/* Segments Tab */}
       {activeTab === "segments" && (
