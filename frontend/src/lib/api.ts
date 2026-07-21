@@ -97,9 +97,32 @@ const unwrap = async <T>(request: Promise<{ data: Envelope<T> }>) => {
   }
 };
 
+type ActivityWire = Partial<ActivityEntry> & {
+  title?: string;
+  meta?: string;
+  time?: string;
+};
+
+const normalizeActivity = (item: ActivityWire, index: number): ActivityEntry => {
+  const action = item.action || item.title || "portfolio_check_completed";
+  const createdAt = item.createdAt || item.time || new Date().toISOString();
+  return {
+    ...item,
+    _id: item._id || `${action}-${createdAt}-${index}`,
+    action,
+    actor: item.actor || item.meta || "Kivora automation",
+    createdAt,
+  };
+};
+
 // ─── API functions ────────────────────────────────────────────────────────────
-export const getDashboard = () =>
-  unwrap(api.get<Envelope<DashboardData>>("/dashboard"));
+export const getDashboard = async () => {
+  const data = await unwrap(api.get<Envelope<DashboardData>>("/dashboard"));
+  return {
+    ...data,
+    activity: (data.activity as ActivityWire[]).map(normalizeActivity),
+  };
+};
 
 export const getPortfolio = () =>
   unwrap(api.get<Envelope<PortfolioData>>("/portfolio"));
@@ -181,8 +204,10 @@ export const generateReport = (input: {
   listingId?: string;
 }) => unwrap(api.post<Envelope<Report>>("/reports/generate", input));
 
-export const getActivity = () =>
-  unwrap(api.get<Envelope<ActivityEntry[]>>("/activity"));
+export const getActivity = async () => {
+  const data = await unwrap(api.get<Envelope<ActivityEntry[]>>("/activity"));
+  return (data as ActivityWire[]).map(normalizeActivity);
+};
 
 export const askKivora = (question: string) =>
   unwrap(

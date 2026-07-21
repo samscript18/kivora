@@ -483,22 +483,25 @@ function RecentActivity({ activity }: { activity: { _id: string; action: string;
         </span>
       </div>
       <div className="space-y-2">
-        {activity.slice(0, 6).map((a, index) => (
-          <div key={a._id || `${a.action}-${a.createdAt}-${index}`} className="flex items-start gap-3 rounded-xl border border-border bg-elevated px-3.5 py-3">
-            <span className="mt-0.5 grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg bg-accent/10 text-accent">
-              <Check size={13} />
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="truncate text-[11px] font-semibold text-foreground">
-                {String(a.action).replaceAll("_", " ")}
+        {activity.slice(0, 6).map((a, index) => {
+          const date = new Date(a.createdAt);
+          return (
+            <div key={a._id || `${a.action}-${a.createdAt}-${index}`} className="flex items-start gap-3 rounded-xl border border-border bg-elevated px-3.5 py-3">
+              <span className="mt-0.5 grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg bg-accent/10 text-accent">
+                <Check size={13} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="truncate text-[11px] font-semibold text-foreground">
+                  {String(a.action).replaceAll("_", " ")}
+                </div>
+                <div className="mt-0.5 text-[9px] text-slate-500">{a.actor ?? "Kivora automation"}</div>
               </div>
-              <div className="mt-0.5 text-[9px] text-slate-500">{a.actor ?? "Kivora automation"}</div>
+              <span className="flex-shrink-0 text-[9px] text-slate-600">
+                {Number.isNaN(date.getTime()) ? "Just now" : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
             </div>
-            <span className="flex-shrink-0 text-[9px] text-slate-600">
-              {new Date(a.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <a href="/dashboard/activity" className="mt-3 block text-center text-[10px] font-semibold text-accent hover:text-accent/80">
         View full audit trail →

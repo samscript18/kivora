@@ -51,29 +51,32 @@ export default function ActivityPage() {
         </div>
       ) : (
         <div className="card rounded-2xl overflow-hidden divide-y divide-white/5">
-          {activities.map((item) => (
-            <div key={item._id} className="p-4 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors">
-              <div className="flex items-center gap-3">
-                <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">
-                  <ActivityIcon size={16} />
-                </span>
-                <div>
-                  <div className="text-xs font-semibold text-foreground capitalize">
-                    {String(item.action).replaceAll("_", " ")}
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">
-                    Actor: <span className="text-slate-400 font-medium">{item.actor || "Kivora Automation"}</span> · Source: {item.source || "System"}
+          {activities.map((item, index) => {
+            const date = new Date(item.createdAt);
+            return (
+              <div key={item._id || `${item.action}-${item.createdAt}-${index}`} className="p-4 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">
+                    <ActivityIcon size={16} />
+                  </span>
+                  <div>
+                    <div className="text-xs font-semibold text-foreground capitalize">
+                      {String(item.action).replaceAll("_", " ")}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      Actor: <span className="text-slate-400 font-medium">{item.actor || "Kivora Automation"}</span> · Source: {item.source || "System"}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="text-right">
-                <span className="font-mono text-[10px] text-slate-500">
-                  {new Date(item.createdAt).toLocaleString()}
-                </span>
+                <div className="text-right">
+                  <span className="font-mono text-[10px] text-slate-500">
+                    {Number.isNaN(date.getTime()) ? "Just now" : date.toLocaleString()}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

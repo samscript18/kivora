@@ -275,7 +275,37 @@ export class RevenueService {
 
   async ask(question: string) {
     const dashboard = await this.dashboard();
-    const context = { summary: dashboard.summary, priorities: dashboard.priorities.slice(0, 12), signals: dashboard.signals.slice(0, 12), lastScan: this.lastScan, source: dashboard.source };
+    const rankedIncidents = [...this.incidentsCache].sort((a, b) => b.revenueAtRisk - a.revenueAtRisk);
+    const largest = rankedIncidents[0];
+    const context = {
+      asOf: this.lastScan,
+      currency: "USD",
+      portfolioSummary: dashboard.summary,
+      revenueRisk: {
+        activeIncidentCount: rankedIncidents.length,
+        criticalIncidentCount: dashboard.summary.criticalIncidents,
+        totalRevenueAtRisk: dashboard.summary.atRisk,
+        largestIncident: largest ? {
+          id: largest.id,
+          title: largest.title,
+          property: largest.listing,
+          cause: largest.cause,
+          measuredRevenueAtRisk: largest.revenueAtRisk,
+          currentRate: largest.currentRate,
+          recommendedRate: largest.recommendedRate,
+          confidence: largest.confidence,
+        } : null,
+      },
+      opportunities: dashboard.opportunities.slice(0, 12),
+      demandSignals: dashboard.signals.slice(0, 12).map((signal) => ({
+        kind: signal.kind,
+        title: signal.title,
+        location: signal.location,
+        confidence: signal.confidence,
+        affectedListings: signal.affectedListings,
+        measuredRevenueImpact: null,
+      })),
+    };
     return this.groq.answer(question, context);
   }
 

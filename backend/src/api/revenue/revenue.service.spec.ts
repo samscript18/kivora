@@ -7,9 +7,10 @@ describe("RevenueService audit rules", () => {
     recentChanges: jest.fn(), flags: jest.fn(),
   };
   const snapshots = { create: jest.fn().mockResolvedValue({}) };
+  const groq = { answer: jest.fn() };
   const service = new RevenueService(
     wheelhouse as never,
-    {} as never,
+    groq as never,
     {} as never,
     { configured: false } as never,
     { get: jest.fn() } as never,
@@ -29,6 +30,7 @@ describe("RevenueService audit rules", () => {
     wheelhouse.kpis.mockResolvedValue({ occupancy: { "0_30": 0.6 }, revenue: { "0_30": 10_000 }, adr: { "0_30": 180 }, occupancy_neighborhood: { "0_30": 0.7 } });
     wheelhouse.recentChanges.mockResolvedValue({ rates: "2026-07-21T10:00:00Z" });
     wheelhouse.flags.mockResolvedValue([]);
+    groq.answer.mockReset();
   });
 
   it("turns a material live underpricing gap into an approval-ready incident", async () => {
@@ -47,5 +49,39 @@ describe("RevenueService audit rules", () => {
   it("blocks pricing previews for operational incidents", async () => {
     (service as any).incidentsCache = [{ id: "calendar", canPreview: false }];
     await expect(service.preview("calendar")).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it("gives the assistant an explicit ranked revenue-risk context", async () => {
+    (service as any).incidentsCache = [{
+      id: "risk-1",
+      title: "Base price is below guidance",
+      listing: "Ocean View",
+      cause: "Underpriced",
+      revenueAtRisk: 4200,
+      currentRate: 100,
+      recommendedRate: 160,
+      confidence: 93,
+    }];
+    const dashboard = jest.spyOn(service, "dashboard").mockResolvedValue({
+      summary: { health: 72, revenue: 18000, atRisk: 4200, opportunities: 1, occupancy: 61, criticalIncidents: 1, marketSignals: 2 },
+      opportunities: [],
+      signals: [{ kind: "event", title: "Festival", location: "Nashville", confidence: 90, affectedListings: 2 }],
+    } as never);
+    groq.answer.mockResolvedValue({ body: "Ocean View has $4,200 at risk." });
+
+    await service.ask("What is my biggest revenue risk today?");
+
+    expect(groq.answer).toHaveBeenCalledWith(
+      "What is my biggest revenue risk today?",
+      expect.objectContaining({
+        revenueRisk: expect.objectContaining({
+          activeIncidentCount: 1,
+          totalRevenueAtRisk: 4200,
+          largestIncident: expect.objectContaining({ property: "Ocean View", measuredRevenueAtRisk: 4200 }),
+        }),
+        demandSignals: [expect.objectContaining({ measuredRevenueImpact: null })],
+      }),
+    );
+    dashboard.mockRestore();
   });
 });
