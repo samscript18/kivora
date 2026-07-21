@@ -1,47 +1,928 @@
 "use client";
-import { applyStrategy, askKivora, generateReport, getActivity, getBriefs, getIncidents, getMarketIntelligence, getOpportunities, getPortfolio, getReports, getSegments, getStrategies, previewIncident, refreshMarketIntelligence, sendBrief, underwriteProperty } from "@/lib/api";
+import {
+  applyStrategy,
+  askKivora,
+  generateReport,
+  getActivity,
+  getBriefs,
+  getIncidents,
+  getMarketIntelligence,
+  getOpportunities,
+  getPortfolio,
+  getReports,
+  getSegments,
+  getStrategies,
+  previewIncident,
+  refreshMarketIntelligence,
+  sendBrief,
+  underwriteProperty,
+} from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Activity as ActivityIcon, AlertTriangle, Bot, Building2, CloudRain, Copy, FileBarChart, House, RefreshCw, Search, Send, ShieldCheck, Sparkles, TrendingUp, Users } from "lucide-react";
+import {
+  Activity as ActivityIcon,
+  AlertTriangle,
+  Bot,
+  Building2,
+  CloudRain,
+  Copy,
+  FileBarChart,
+  House,
+  RefreshCw,
+  Search,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-export type WorkspaceView = "Overview" | "Incidents" | "Portfolio" | "Opportunities" | "Market intelligence" | "Strategy simulator" | "Portfolios" | "Owner briefs" | "Reports" | "Activity" | "AI assistant" | "Underwrite";
-const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value || 0);
-function Header({ eyebrow, title, copy }: { eyebrow: string; title: string; copy: string }) { return <div className="mb-7"><div className="text-[10px] font-bold uppercase tracking-[.14em] text-[#1b6b4a]">{eyebrow}</div><h2 className="display mt-2 text-3xl font-bold">{title}</h2><p className="mt-2 text-[12px] text-[#748079]">{copy}</p></div>; }
-function Loading() { return <div className="card rounded-2xl p-8 text-center text-sm">Loading live data…</div>; }
-function Failed({ error }: { error: unknown }) { return <div className="card rounded-2xl border border-red-200 p-8 text-center text-sm text-red-700">Live data unavailable: {error instanceof Error ? error.message : "request failed"}</div>; }
-function Empty({ children }: { children: React.ReactNode }) { return <div className="p-8 text-center text-sm text-[#748079]">{children}</div>; }
+export type WorkspaceView =
+  | "Overview"
+  | "Incidents"
+  | "Portfolio"
+  | "Opportunities"
+  | "Market intelligence"
+  | "Strategy simulator"
+  | "Portfolios"
+  | "Owner briefs"
+  | "Reports"
+  | "Activity"
+  | "AI assistant"
+  | "Underwrite";
+const money = (value: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+function Header({
+  eyebrow,
+  title,
+  copy,
+}: {
+  eyebrow: string;
+  title: string;
+  copy: string;
+}) {
+  return (
+    <div className="mb-7">
+      <div className="text-[10px] font-bold uppercase tracking-[.14em] text-[#1b6b4a]">
+        {eyebrow}
+      </div>
+      <h2 className="display mt-2 text-3xl font-bold">{title}</h2>
+      <p className="mt-2 text-[12px] text-[#748079]">{copy}</p>
+    </div>
+  );
+}
+function Loading() {
+  return (
+    <div className="card rounded-2xl p-8 text-center text-sm">
+      Loading live data…
+    </div>
+  );
+}
+function Failed({ error }: { error: unknown }) {
+  return (
+    <div className="card rounded-2xl border border-red-200 p-8 text-center text-sm text-red-700">
+      Live data unavailable:{" "}
+      {error instanceof Error ? error.message : "request failed"}
+    </div>
+  );
+}
+function Empty({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="p-8 text-center text-sm text-[#748079]">{children}</div>
+  );
+}
 
-export function ProductView({ view, onIncident }: { view: Exclude<WorkspaceView, "Overview">; onIncident: (incident: any) => void }) { return <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-[1440px] p-4 sm:p-7">{view === "Incidents" && <Incidents onOpen={onIncident} />}{view === "Portfolio" && <Portfolio />}{view === "Opportunities" && <Opportunities />}{view === "Market intelligence" && <MarketIntelligence />}{view === "Strategy simulator" && <StrategySimulator />}{view === "Portfolios" && <Portfolios />}{view === "Owner briefs" && <Briefs />}{view === "Reports" && <Reports />}{view === "Activity" && <Activity />}{view === "AI assistant" && <Assistant />}{view === "Underwrite" && <Underwrite />}</motion.div>; }
+export function ProductView({
+  view,
+  onIncident,
+}: {
+  view: Exclude<WorkspaceView, "Overview">;
+  onIncident: (incident: any) => void;
+}) {
+  return (
+    <motion.div
+      key={view}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mx-auto max-w-[1440px] p-4 sm:p-7"
+    >
+      {view === "Incidents" && <Incidents onOpen={onIncident} />}
+      {view === "Portfolio" && <Portfolio />}
+      {view === "Opportunities" && <Opportunities />}
+      {view === "Market intelligence" && <MarketIntelligence />}
+      {view === "Strategy simulator" && <StrategySimulator />}
+      {view === "Portfolios" && <Portfolios />}
+      {view === "Owner briefs" && <Briefs />}
+      {view === "Reports" && <Reports />}
+      {view === "Activity" && <Activity />}
+      {view === "AI assistant" && <Assistant />}
+      {view === "Underwrite" && <Underwrite />}
+    </motion.div>
+  );
+}
 
-function Incidents({ onOpen }: { onOpen: (incident: any) => void }) { const query = useQuery({ queryKey: ["incidents"], queryFn: getIncidents }); if (query.isLoading) return <Loading />; if (query.error) return <Failed error={query.error} />; const items = query.data ?? []; return <><Header eyebrow="Revenue protection" title="Incidents" copy="Live pricing and operational risks ranked by verified financial exposure." /><section className="card overflow-hidden rounded-2xl">{items.length === 0 ? <Empty>No open incidents in the latest Wheelhouse scan.</Empty> : items.map((item: any) => <button key={item.id} onClick={() => onOpen(item)} className="flex w-full items-center gap-4 border-b p-5 text-left"><AlertTriangle className="text-[#9e412e]" /><span className="flex-1"><b className="block text-sm">{item.title}</b><small>{item.listing} · {new Date(item.detectedAt).toLocaleString()}</small></span><b className="text-[#9e412e]">{money(item.revenueAtRisk)}</b></button>)}</section></>; }
+function Incidents({ onOpen }: { onOpen: (incident: any) => void }) {
+  const query = useQuery({ queryKey: ["incidents"], queryFn: getIncidents });
+  if (query.isLoading) return <Loading />;
+  if (query.error) return <Failed error={query.error} />;
+  const items = query.data ?? [];
+  return (
+    <>
+      <Header
+        eyebrow="Revenue protection"
+        title="Incidents"
+        copy="Live pricing and operational risks ranked by verified financial exposure."
+      />
+      <section className="card overflow-hidden rounded-2xl">
+        {items.length === 0 ? (
+          <Empty>No open incidents in the latest portfolio scan.</Empty>
+        ) : (
+          items.map((item: any) => (
+            <button
+              key={item.id}
+              onClick={() => onOpen(item)}
+              className="flex w-full items-center gap-4 border-b p-5 text-left"
+            >
+              <AlertTriangle className="text-[#9e412e]" />
+              <span className="flex-1">
+                <b className="block text-sm">{item.title}</b>
+                <small>
+                  {item.listing} · {new Date(item.detectedAt).toLocaleString()}
+                </small>
+              </span>
+              <b className="text-[#9e412e]">{money(item.revenueAtRisk)}</b>
+            </button>
+          ))
+        )}
+      </section>
+    </>
+  );
+}
 
-function Portfolio() { const [search, setSearch] = useState(""); const query = useQuery({ queryKey: ["portfolio"], queryFn: getPortfolio }); const rows = useMemo(() => (query.data?.listings ?? []).filter((item: any) => `${item.nickname || item.title || item.id} ${item.location?.address || ""}`.toLowerCase().includes(search.toLowerCase())), [query.data, search]); if (query.isLoading) return <Loading />; if (query.error) return <Failed error={query.error} />; return <><Header eyebrow={`${rows.length} live listings`} title="Portfolio" copy="Revenue, occupancy, ADR, RevPAR, pace, market position, and pricing status from Wheelhouse." /><label className="mb-4 flex w-fit items-center gap-2 rounded-xl border border-white/10 bg-[#0a0a0c] px-3 py-2"><Search size={14} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search listings" className="outline-none" /></label><section className="grid gap-4 xl:grid-cols-2">{rows.length === 0 ? <div className="card rounded-2xl"><Empty>No connected listings returned by Wheelhouse.</Empty></div> : rows.map((item: any) => <article key={item.id} className="card rounded-2xl p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white/5"><Building2 size={17} /></span><div className="min-w-0 flex-1"><b className="block truncate">{item.nickname || item.title || item.id}</b><small className="text-slate-500">{item.location?.address || item.location?.country || item.channel}</small></div><span className={`rounded-full px-2 py-1 text-[9px] font-bold ${item.metrics?.dynamicPricingEnabled?"bg-emerald-500/10 text-emerald-400":"bg-red-500/10 text-red-400"}`}>{item.metrics?.dynamicPricingEnabled?"DYNAMIC ON":"REVIEW PRICING"}</span></div><div className="mt-5 grid grid-cols-3 gap-3 border-t border-white/8 pt-4 sm:grid-cols-6">{[["Health",item.metrics?.health??"—"],["Revenue",money(item.metrics?.revenue)],["Occupancy",item.metrics?`${(item.metrics.occupancy*100).toFixed(1)}%`:"—"],["ADR",money(item.metrics?.adr)],["RevPAR",money(item.metrics?.revpar)],["Pace",item.metrics?.pickup??"—"]].map(([label,value])=><div key={String(label)}><div className="text-[8px] uppercase tracking-wider text-slate-600">{label}</div><div className="mt-1 text-xs font-bold">{value}</div></div>)}</div></article>)}</section></>; }
+function Portfolio() {
+  const [search, setSearch] = useState("");
+  const query = useQuery({ queryKey: ["portfolio"], queryFn: getPortfolio });
+  const rows = useMemo(
+    () =>
+      (query.data?.listings ?? []).filter((item: any) =>
+        `${item.nickname || item.title || item.id} ${item.location?.address || ""}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+      ),
+    [query.data, search],
+  );
+  if (query.isLoading) return <Loading />;
+  if (query.error) return <Failed error={query.error} />;
+  return (
+    <>
+      <Header
+        eyebrow={`${rows.length} live listings`}
+        title="Portfolio"
+        copy="Revenue, occupancy, ADR, RevPAR, pace, market position, and live pricing status."
+      />
+      <label className="mb-4 flex w-fit items-center gap-2 rounded-xl border border-white/10 bg-[#0a0a0c] px-3 py-2">
+        <Search size={14} />
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search listings"
+          className="outline-none"
+        />
+      </label>
+      <section className="grid gap-4 xl:grid-cols-2">
+        {rows.length === 0 ? (
+          <div className="card rounded-2xl">
+            <Empty>No connected listings are available.</Empty>
+          </div>
+        ) : (
+          rows.map((item: any) => (
+            <article key={item.id} className="card rounded-2xl p-5">
+              <div className="flex items-start gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/5">
+                  <Building2 size={17} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <b className="block truncate">
+                    {item.nickname || item.title || item.id}
+                  </b>
+                  <small className="text-slate-500">
+                    {item.location?.address ||
+                      item.location?.country ||
+                      item.channel}
+                  </small>
+                </div>
+                <span
+                  className={`rounded-full px-2 py-1 text-[9px] font-bold ${item.metrics?.dynamicPricingEnabled ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}
+                >
+                  {item.metrics?.dynamicPricingEnabled
+                    ? "DYNAMIC ON"
+                    : "REVIEW PRICING"}
+                </span>
+              </div>
+              <div className="mt-5 grid grid-cols-3 gap-3 border-t border-white/8 pt-4 sm:grid-cols-6">
+                {[
+                  ["Health", item.metrics?.health ?? "—"],
+                  ["Revenue", money(item.metrics?.revenue)],
+                  [
+                    "Occupancy",
+                    item.metrics
+                      ? `${(item.metrics.occupancy * 100).toFixed(1)}%`
+                      : "—",
+                  ],
+                  ["ADR", money(item.metrics?.adr)],
+                  ["RevPAR", money(item.metrics?.revpar)],
+                  ["Pace", item.metrics?.pickup ?? "—"],
+                ].map(([label, value]) => (
+                  <div key={String(label)}>
+                    <div className="text-[8px] uppercase tracking-wider text-slate-600">
+                      {label}
+                    </div>
+                    <div className="mt-1 text-xs font-bold">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))
+        )}
+      </section>
+    </>
+  );
+}
 
-function Opportunities() { const query = useQuery({ queryKey: ["opportunities"], queryFn: getOpportunities }); const preview = useMutation({ mutationFn: previewIncident, onSuccess: (result) => toast.success(`Live preview: ${money(result.projectedRecovery)} projected recovery`), onError: (error) => toast.error(error instanceof Error ? error.message : "Preview failed") }); if (query.isLoading) return <Loading />; if (query.error) return <Failed error={query.error} />; return <><Header eyebrow="Revenue upside" title="Opportunities" copy="Actions derived only from live, detected incidents." /><div className="grid gap-3">{query.data?.length ? query.data.map((item: any) => <article key={item.id} className="card flex items-center gap-4 rounded-2xl p-5"><TrendingUp className="text-[#26704f]" /><div className="flex-1"><b>{item.property}</b><p className="text-sm text-[#748079]">{item.action} · {item.confidence}% confidence</p></div><b>+{money(item.impact)}</b>{item.canPreview ? <button onClick={() => preview.mutate(item.id)} className="rounded-xl bg-[#173f2e] px-4 py-3 text-xs font-bold text-white">Live preview</button> : <span className="rounded-xl border border-white/10 px-4 py-3 text-xs text-slate-500">Manual review</span>}</article>) : <section className="card rounded-2xl"><Empty>No live opportunities detected.</Empty></section>}</div></>; }
+function Opportunities() {
+  const query = useQuery({
+    queryKey: ["opportunities"],
+    queryFn: getOpportunities,
+  });
+  const preview = useMutation({
+    mutationFn: previewIncident,
+    onSuccess: (result) =>
+      toast.success(
+        `Live preview: ${money(result.projectedRecovery)} projected recovery`,
+      ),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Preview failed"),
+  });
+  if (query.isLoading) return <Loading />;
+  if (query.error) return <Failed error={query.error} />;
+  return (
+    <>
+      <Header
+        eyebrow="Revenue upside"
+        title="Opportunities"
+        copy="Actions derived only from live, detected incidents."
+      />
+      <div className="grid gap-3">
+        {query.data?.length ? (
+          query.data.map((item: any) => (
+            <article
+              key={item.id}
+              className="card flex items-center gap-4 rounded-2xl p-5"
+            >
+              <TrendingUp className="text-[#26704f]" />
+              <div className="flex-1">
+                <b>{item.property}</b>
+                <p className="text-sm text-[#748079]">
+                  {item.action} · {item.confidence}% confidence
+                </p>
+              </div>
+              <b>+{money(item.impact)}</b>
+              {item.canPreview ? (
+                <button
+                  onClick={() => preview.mutate(item.id)}
+                  className="rounded-xl bg-[#173f2e] px-4 py-3 text-xs font-bold text-white"
+                >
+                  Live preview
+                </button>
+              ) : (
+                <span className="rounded-xl border border-white/10 px-4 py-3 text-xs text-slate-500">
+                  Manual review
+                </span>
+              )}
+            </article>
+          ))
+        ) : (
+          <section className="card rounded-2xl">
+            <Empty>No live opportunities detected.</Empty>
+          </section>
+        )}
+      </div>
+    </>
+  );
+}
 
-function Briefs() { const query = useQuery({ queryKey: ["briefs"], queryFn: getBriefs }); const [selected, setSelected] = useState(0); const send = useMutation({ mutationFn: sendBrief, onSuccess: () => { toast.success("Brief delivered to Telegram"); query.refetch(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Delivery failed") }); if (query.isLoading) return <Loading />; if (query.error) return <Failed error={query.error} />; const items = query.data ?? []; const current = items[selected]; return <><Header eyebrow="Owner success" title="Owner briefs" copy="Groq-generated updates created after verified live actions." /><div className="grid gap-4 lg:grid-cols-2"><section className="card rounded-2xl">{items.length ? items.map((item: any, index: number) => <button key={item._id} onClick={() => setSelected(index)} className="block w-full border-b p-4 text-left"><b>{item.owner || item.listingId}</b><small className="block">{item.subject} · {item.status}</small></button>) : <Empty>No briefs have been generated.</Empty>}</section>{current && <section className="card rounded-2xl p-6"><h3 className="font-bold">{current.subject}</h3><p className="my-5 whitespace-pre-wrap text-sm leading-7">{current.body}</p><div className="flex justify-end gap-2"><button onClick={() => navigator.clipboard?.writeText(current.body)} className="rounded-xl border p-3"><Copy size={15} /></button><button disabled={send.isPending || current.status === "sent"} onClick={() => send.mutate(current._id)} className="flex items-center gap-2 rounded-xl bg-[#173f2e] px-4 py-3 text-xs font-bold text-white"><Send size={14} /> Deliver via Telegram</button></div></section>}</div></>; }
+function Briefs() {
+  const query = useQuery({ queryKey: ["briefs"], queryFn: getBriefs });
+  const [selected, setSelected] = useState(0);
+  const send = useMutation({
+    mutationFn: sendBrief,
+    onSuccess: () => {
+      toast.success("Brief delivered to your mobile companion");
+      query.refetch();
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Delivery failed"),
+  });
+  if (query.isLoading) return <Loading />;
+  if (query.error) return <Failed error={query.error} />;
+  const items = query.data ?? [];
+  const current = items[selected];
+  return (
+    <>
+      <Header
+        eyebrow="Owner success"
+        title="Owner briefs"
+        copy="Clear owner updates created from verified live actions."
+      />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="card rounded-2xl">
+          {items.length ? (
+            items.map((item: any, index: number) => (
+              <button
+                key={item._id}
+                onClick={() => setSelected(index)}
+                className="block w-full border-b p-4 text-left"
+              >
+                <b>{item.owner || item.listingId}</b>
+                <small className="block">
+                  {item.subject} · {item.status}
+                </small>
+              </button>
+            ))
+          ) : (
+            <Empty>No briefs have been generated.</Empty>
+          )}
+        </section>
+        {current && (
+          <section className="card rounded-2xl p-6">
+            <h3 className="font-bold">{current.subject}</h3>
+            <p className="my-5 whitespace-pre-wrap text-sm leading-7">
+              {current.body}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => navigator.clipboard?.writeText(current.body)}
+                className="rounded-xl border p-3"
+              >
+                <Copy size={15} />
+              </button>
+              <button
+                disabled={send.isPending || current.status === "sent"}
+                onClick={() => send.mutate(current._id)}
+                className="flex items-center gap-2 rounded-xl bg-[#173f2e] px-4 py-3 text-xs font-bold text-white"
+              >
+                <Send size={14} /> Deliver to mobile
+              </button>
+            </div>
+          </section>
+        )}
+      </div>
+    </>
+  );
+}
 
 function MarketIntelligence() {
- const query=useQuery({queryKey:["market-intelligence"],queryFn:getMarketIntelligence});
- const refresh=useMutation({mutationFn:refreshMarketIntelligence,onSuccess:()=>{toast.success("Live market signals refreshed");query.refetch()},onError:(error)=>toast.error(error instanceof Error?error.message:"Refresh failed")});
- if(query.isLoading)return <Loading/>;if(query.error)return <Failed error={query.error}/>;const signals=query.data??[];
- return <><Header eyebrow="External demand intelligence" title="Market intelligence" copy="Live Ticketmaster events and OpenWeather forecasts matched to Wheelhouse listing coordinates."/><div className="mb-5 flex justify-end"><button disabled={refresh.isPending} onClick={()=>refresh.mutate()} className="flex items-center gap-2 rounded-xl bg-[#173f2e] px-4 py-3 text-xs font-bold text-white"><RefreshCw size={14}/>{refresh.isPending?"Refreshing live APIs…":"Refresh signals"}</button></div><div className="grid gap-4 md:grid-cols-2">{signals.length?signals.map((signal:any)=><article key={signal.externalId} className="card rounded-2xl p-5"><div className="flex items-start gap-3"><span className={`grid h-10 w-10 place-items-center rounded-xl ${signal.kind==="event"?"bg-[#FF1301]/10 text-accent":"bg-blue-500/10 text-blue-400"}`}>{signal.kind==="event"?<Sparkles size={18}/>:<CloudRain size={18}/>}</span><div className="min-w-0 flex-1"><div className="font-mono text-[9px] uppercase tracking-wider text-slate-500">{signal.source}</div><h3 className="mt-1 font-bold">{signal.title}</h3><p className="mt-1 text-xs text-slate-500">{signal.location}</p></div><span className="text-xs font-bold text-accent-2">{signal.confidence}%</span></div><p className="mt-4 text-xs leading-6 text-slate-400">{signal.description||"Live demand signal detected."}</p><div className="mt-4 flex justify-between border-t border-white/8 pt-4 text-[10px] text-slate-500"><span>{signal.affectedListings} affected listings</span><span>Demand: {signal.demandDirection}</span></div></article>):<section className="card col-span-full rounded-2xl"><Empty>No live external signals are stored. Configure Ticketmaster/OpenWeather, then refresh.</Empty></section>}</div></>;
+  const query = useQuery({
+    queryKey: ["market-intelligence"],
+    queryFn: getMarketIntelligence,
+  });
+  const refresh = useMutation({
+    mutationFn: refreshMarketIntelligence,
+    onSuccess: () => {
+      toast.success("Live market signals refreshed");
+      query.refetch();
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Refresh failed"),
+  });
+  if (query.isLoading) return <Loading />;
+  if (query.error) return <Failed error={query.error} />;
+  const signals = query.data ?? [];
+  return (
+    <>
+      <Header
+        eyebrow="External demand intelligence"
+        title="Market intelligence"
+        copy="Live event and weather signals matched to your portfolio locations."
+      />
+      <div className="mb-5 flex justify-end">
+        <button
+          disabled={refresh.isPending}
+          onClick={() => refresh.mutate()}
+          className="flex items-center gap-2 rounded-xl bg-[#173f2e] px-4 py-3 text-xs font-bold text-white"
+        >
+          <RefreshCw size={14} />
+          {refresh.isPending ? "Refreshing live signals…" : "Refresh signals"}
+        </button>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        {signals.length ? (
+          signals.map((signal: any) => (
+            <article key={signal.externalId} className="card rounded-2xl p-5">
+              <div className="flex items-start gap-3">
+                <span
+                  className={`grid h-10 w-10 place-items-center rounded-xl ${signal.kind === "event" ? "bg-[#FF1301]/10 text-accent" : "bg-blue-500/10 text-blue-400"}`}
+                >
+                  {signal.kind === "event" ? (
+                    <Sparkles size={18} />
+                  ) : (
+                    <CloudRain size={18} />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-slate-500">
+                    {signal.kind === "event"
+                      ? "Live event signal"
+                      : "Live weather signal"}
+                  </div>
+                  <h3 className="mt-1 font-bold">{signal.title}</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {signal.location}
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-accent-2">
+                  {signal.confidence}%
+                </span>
+              </div>
+              <p className="mt-4 text-xs leading-6 text-slate-400">
+                {signal.description || "Live demand signal detected."}
+              </p>
+              <div className="mt-4 flex justify-between border-t border-white/8 pt-4 text-[10px] text-slate-500">
+                <span>{signal.affectedListings} affected listings</span>
+                <span>Demand: {signal.demandDirection}</span>
+              </div>
+            </article>
+          ))
+        ) : (
+          <section className="card col-span-full rounded-2xl">
+            <Empty>
+              No live external signals are available yet. Ask your workspace
+              administrator to enable market intelligence.
+            </Empty>
+          </section>
+        )}
+      </div>
+    </>
+  );
 }
 
-function StrategySimulator(){
- const portfolio=useQuery({queryKey:["portfolio"],queryFn:getPortfolio});const [listingId,setListingId]=useState("");const query=useQuery({queryKey:["strategies",listingId],queryFn:()=>getStrategies(listingId),enabled:Boolean(listingId)});const qc=useQueryClient();
- const apply=useMutation({mutationFn:(strategy:string)=>applyStrategy(listingId,strategy),onSuccess:(result)=>{toast.success(`${result.strategy} strategy applied`,{description:"Wheelhouse sync was queued."});qc.invalidateQueries({queryKey:["dashboard"]});query.refetch()},onError:(error)=>toast.error(error instanceof Error?error.message:"Strategy update failed")});
- return <><Header eyebrow="Wheelhouse what-if engine" title="Revenue strategy simulator" copy="Compare conservative, balanced, and aggressive pricing with live, non-mutating Wheelhouse previews before approval."/><section className="card rounded-2xl p-5"><label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Listing</label><select value={listingId} onChange={(event)=>setListingId(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0a0c] p-3 text-sm"><option value="">Choose a live listing</option>{portfolio.data?.listings.map((listing:any)=><option key={listing.id} value={listing.id}>{listing.nickname||listing.title||listing.id}</option>)}</select></section>{query.isLoading&&<div className="mt-4"><Loading/></div>}{query.error&&<div className="mt-4"><Failed error={query.error}/></div>}{query.data&&<div className="mt-4 grid gap-4 lg:grid-cols-3">{query.data.strategies.map((strategy:any)=><article key={strategy.key} className={`card rounded-2xl p-6 ${strategy.key==="balanced"?"ring-1 ring-accent":""}`}><div className="flex items-center justify-between"><h3 className="text-lg font-bold">{strategy.label}</h3>{strategy.key==="balanced"&&<span className="rounded-full bg-[#FF1301]/10 px-2 py-1 text-[9px] font-bold text-accent">RECOMMENDED</span>}</div>{strategy.available?<><div className="mt-6 text-[10px] uppercase text-slate-500">30-day projected revenue</div><div className="mt-1 text-2xl font-bold">{money(strategy.projectedRevenue)}</div><div className={`mt-2 text-xs font-bold ${strategy.estimatedUplift>=0?"text-emerald-400":"text-red-400"}`}>{strategy.estimatedUplift>=0?"+":""}{money(strategy.estimatedUplift)} estimated change</div><button disabled={apply.isPending} onClick={()=>apply.mutate(strategy.key)} className="mt-6 w-full rounded-xl bg-[#173f2e] py-3 text-xs font-bold text-white">Approve & apply</button></>:<p className="mt-6 text-xs text-slate-500">{strategy.reason}</p>}</article>)}</div>}</>;
+function StrategySimulator() {
+  const portfolio = useQuery({
+    queryKey: ["portfolio"],
+    queryFn: getPortfolio,
+  });
+  const [listingId, setListingId] = useState("");
+  const query = useQuery({
+    queryKey: ["strategies", listingId],
+    queryFn: () => getStrategies(listingId),
+    enabled: Boolean(listingId),
+  });
+  const qc = useQueryClient();
+  const apply = useMutation({
+    mutationFn: (strategy: string) => applyStrategy(listingId, strategy),
+    onSuccess: (result) => {
+      toast.success(`${result.strategy} strategy applied`, {
+        description: "Portfolio synchronization was queued.",
+      });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      query.refetch();
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error ? error.message : "Strategy update failed",
+      ),
+  });
+  return (
+    <>
+      <Header
+        eyebrow="Live what-if engine"
+        title="Revenue strategy simulator"
+        copy="Compare conservative, balanced, and aggressive pricing with live, non-mutating previews before approval."
+      />
+      <section className="card rounded-2xl p-5">
+        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          Listing
+        </label>
+        <select
+          value={listingId}
+          onChange={(event) => setListingId(event.target.value)}
+          className="mt-2 w-full rounded-xl border border-white/10 bg-[#0a0a0c] p-3 text-sm"
+        >
+          <option value="">Choose a live listing</option>
+          {portfolio.data?.listings.map((listing: any) => (
+            <option key={listing.id} value={listing.id}>
+              {listing.nickname || listing.title || listing.id}
+            </option>
+          ))}
+        </select>
+      </section>
+      {query.isLoading && (
+        <div className="mt-4">
+          <Loading />
+        </div>
+      )}
+      {query.error && (
+        <div className="mt-4">
+          <Failed error={query.error} />
+        </div>
+      )}
+      {query.data && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          {query.data.strategies.map((strategy: any) => (
+            <article
+              key={strategy.key}
+              className={`card rounded-2xl p-6 ${strategy.key === "balanced" ? "ring-1 ring-accent" : ""}`}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold">{strategy.label}</h3>
+                {strategy.key === "balanced" && (
+                  <span className="rounded-full bg-[#FF1301]/10 px-2 py-1 text-[9px] font-bold text-accent">
+                    RECOMMENDED
+                  </span>
+                )}
+              </div>
+              {strategy.available ? (
+                <>
+                  <div className="mt-6 text-[10px] uppercase text-slate-500">
+                    30-day projected revenue
+                  </div>
+                  <div className="mt-1 text-2xl font-bold">
+                    {money(strategy.projectedRevenue)}
+                  </div>
+                  <div
+                    className={`mt-2 text-xs font-bold ${strategy.estimatedUplift >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                  >
+                    {strategy.estimatedUplift >= 0 ? "+" : ""}
+                    {money(strategy.estimatedUplift)} estimated change
+                  </div>
+                  <button
+                    disabled={apply.isPending}
+                    onClick={() => apply.mutate(strategy.key)}
+                    className="mt-6 w-full rounded-xl bg-[#173f2e] py-3 text-xs font-bold text-white"
+                  >
+                    Approve & apply
+                  </button>
+                </>
+              ) : (
+                <p className="mt-6 text-xs text-slate-500">{strategy.reason}</p>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+    </>
+  );
 }
 
-function Portfolios(){const query=useQuery({queryKey:["segments"],queryFn:getSegments});if(query.isLoading)return <Loading/>;if(query.error)return <Failed error={query.error}/>;const segments=query.data?.segments??[];return <><Header eyebrow="Multi-portfolio workspace" title="Portfolio segments" copy="Wheelhouse segments let revenue teams manage logical client and market portfolios from one workspace."/><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{segments.length?segments.map((segment:any)=><article key={segment.id} className="card rounded-2xl p-5"><Users className="text-accent"/><h3 className="mt-4 font-bold">{segment.name||`Portfolio ${segment.id}`}</h3><p className="mt-2 text-xs leading-6 text-slate-500">{segment.description||segment.type||"Wheelhouse portfolio segment"}</p></article>):<section className="card col-span-full rounded-2xl"><Empty>No Wheelhouse segments are configured for this account.</Empty></section>}</div></>}
+function Portfolios() {
+  const query = useQuery({ queryKey: ["segments"], queryFn: getSegments });
+  if (query.isLoading) return <Loading />;
+  if (query.error) return <Failed error={query.error} />;
+  const segments = query.data?.segments ?? [];
+  return (
+    <>
+      <Header
+        eyebrow="Multi-portfolio workspace"
+        title="Portfolio segments"
+        copy="Revenue teams can manage logical client and market portfolios from one workspace."
+      />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {segments.length ? (
+          segments.map((segment: any) => (
+            <article key={segment.id} className="card rounded-2xl p-5">
+              <Users className="text-accent" />
+              <h3 className="mt-4 font-bold">
+                {segment.name || `Portfolio ${segment.id}`}
+              </h3>
+              <p className="mt-2 text-xs leading-6 text-slate-500">
+                {segment.description ||
+                  segment.type ||
+                  "Revenue portfolio segment"}
+              </p>
+            </article>
+          ))
+        ) : (
+          <section className="card col-span-full rounded-2xl">
+            <Empty>
+              No portfolio segments are configured for this account.
+            </Empty>
+          </section>
+        )}
+      </div>
+    </>
+  );
+}
 
-function Reports(){const query=useQuery({queryKey:["reports"],queryFn:getReports});const portfolio=useQuery({queryKey:["portfolio"],queryFn:getPortfolio});const [type,setType]=useState<"executive"|"portfolio"|"owner"|"revenue">("executive");const [listingId,setListingId]=useState("");const create=useMutation({mutationFn:()=>generateReport({type,listingId:type==="owner"?listingId:undefined}),onSuccess:()=>{toast.success("Live-data report generated with Groq");query.refetch()},onError:(error)=>toast.error(error instanceof Error?error.message:"Report generation failed")});if(query.isLoading)return <Loading/>;if(query.error)return <Failed error={query.error}/>;return <><Header eyebrow="Grounded communications" title="Reports" copy="Executive, portfolio, owner, and revenue reports generated by Groq from live Wheelhouse metrics and stored market signals."/><div className="mb-5 flex flex-col gap-3 sm:flex-row"><select value={type} onChange={(event)=>setType(event.target.value as typeof type)} className="rounded-xl border border-white/10 bg-[#0a0a0c] px-4 py-3 text-xs"><option value="executive">Executive report</option><option value="portfolio">Portfolio performance</option><option value="owner">Owner report</option><option value="revenue">Revenue summary</option></select>{type==="owner"&&<select value={listingId} onChange={(event)=>setListingId(event.target.value)} className="rounded-xl border border-white/10 bg-[#0a0a0c] px-4 py-3 text-xs"><option value="">Choose listing</option>{portfolio.data?.listings.map((listing:any)=><option key={listing.id} value={listing.id}>{listing.nickname||listing.title||listing.id}</option>)}</select>}<button disabled={create.isPending||(type==="owner"&&!listingId)} onClick={()=>create.mutate()} className="flex items-center justify-center gap-2 rounded-xl bg-[#173f2e] px-4 py-3 text-xs font-bold text-white disabled:opacity-40"><FileBarChart size={14}/>{create.isPending?"Generating…":"Generate report"}</button></div><div className="grid gap-4">{query.data?.length?query.data.map((report:any)=><article key={report._id} className="card rounded-2xl p-6"><div className="flex items-center justify-between"><h3 className="font-bold">{report.title}</h3><span className="font-mono text-[9px] uppercase text-slate-500">{report.status}</span></div><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-400">{report.body}</p><div className="mt-4 text-[9px] text-slate-600">Generated by {report.generatedBy}</div></article>):<section className="card rounded-2xl"><Empty>No reports generated yet.</Empty></section>}</div></>}
+function Reports() {
+  const query = useQuery({ queryKey: ["reports"], queryFn: getReports });
+  const portfolio = useQuery({
+    queryKey: ["portfolio"],
+    queryFn: getPortfolio,
+  });
+  const [type, setType] = useState<
+    "executive" | "portfolio" | "owner" | "revenue"
+  >("executive");
+  const [listingId, setListingId] = useState("");
+  const create = useMutation({
+    mutationFn: () =>
+      generateReport({
+        type,
+        listingId: type === "owner" ? listingId : undefined,
+      }),
+    onSuccess: () => {
+      toast.success("Live-data report generated");
+      query.refetch();
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error ? error.message : "Report generation failed",
+      ),
+  });
+  if (query.isLoading) return <Loading />;
+  if (query.error) return <Failed error={query.error} />;
+  return (
+    <>
+      <Header
+        eyebrow="Grounded communications"
+        title="Reports"
+        copy="Executive, portfolio, owner, and revenue reports grounded in live metrics and stored market signals."
+      />
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+        <select
+          value={type}
+          onChange={(event) => setType(event.target.value as typeof type)}
+          className="rounded-xl border border-white/10 bg-[#0a0a0c] px-4 py-3 text-xs"
+        >
+          <option value="executive">Executive report</option>
+          <option value="portfolio">Portfolio performance</option>
+          <option value="owner">Owner report</option>
+          <option value="revenue">Revenue summary</option>
+        </select>
+        {type === "owner" && (
+          <select
+            value={listingId}
+            onChange={(event) => setListingId(event.target.value)}
+            className="rounded-xl border border-white/10 bg-[#0a0a0c] px-4 py-3 text-xs"
+          >
+            <option value="">Choose listing</option>
+            {portfolio.data?.listings.map((listing: any) => (
+              <option key={listing.id} value={listing.id}>
+                {listing.nickname || listing.title || listing.id}
+              </option>
+            ))}
+          </select>
+        )}
+        <button
+          disabled={create.isPending || (type === "owner" && !listingId)}
+          onClick={() => create.mutate()}
+          className="flex items-center justify-center gap-2 rounded-xl bg-[#173f2e] px-4 py-3 text-xs font-bold text-white disabled:opacity-40"
+        >
+          <FileBarChart size={14} />
+          {create.isPending ? "Generating…" : "Generate report"}
+        </button>
+      </div>
+      <div className="grid gap-4">
+        {query.data?.length ? (
+          query.data.map((report: any) => (
+            <article key={report._id} className="card rounded-2xl p-6">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold">{report.title}</h3>
+                <span className="font-mono text-[9px] uppercase text-slate-500">
+                  {report.status}
+                </span>
+              </div>
+              <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-400">
+                {report.body}
+              </p>
+              <div className="mt-4 text-[9px] text-slate-600">
+                Grounded in verified live data
+              </div>
+            </article>
+          ))
+        ) : (
+          <section className="card rounded-2xl">
+            <Empty>No reports generated yet.</Empty>
+          </section>
+        )}
+      </div>
+    </>
+  );
+}
 
-function Activity(){const query=useQuery({queryKey:["activity"],queryFn:getActivity});if(query.isLoading)return <Loading/>;if(query.error)return <Failed error={query.error}/>;return <><Header eyebrow="Operational audit trail" title="Team activity" copy="Verified pricing actions, reports, approvals, and their actors."/><section className="card overflow-hidden rounded-2xl">{query.data?.length?query.data.map((item:any)=><div key={item._id} className="flex items-center gap-4 border-b border-white/8 p-5"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#FF1301]/10 text-accent"><ActivityIcon size={16}/></span><div className="flex-1"><div className="text-sm font-bold">{String(item.action).replaceAll("_"," ")}</div><div className="mt-1 text-[10px] text-slate-500">{item.actor||"Kivora automation"} · {item.source||"Internal"}</div></div><div className="text-[10px] text-slate-600">{new Date(item.createdAt).toLocaleString()}</div></div>):<Empty>No approved actions have been recorded.</Empty>}</section></>}
+function Activity() {
+  const query = useQuery({ queryKey: ["activity"], queryFn: getActivity });
+  if (query.isLoading) return <Loading />;
+  if (query.error) return <Failed error={query.error} />;
+  return (
+    <>
+      <Header
+        eyebrow="Operational audit trail"
+        title="Team activity"
+        copy="Verified pricing actions, reports, approvals, and their actors."
+      />
+      <section className="card overflow-hidden rounded-2xl">
+        {query.data?.length ? (
+          query.data.map((item: any) => (
+            <div
+              key={item._id}
+              className="flex items-center gap-4 border-b border-white/8 p-5"
+            >
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#FF1301]/10 text-accent">
+                <ActivityIcon size={16} />
+              </span>
+              <div className="flex-1">
+                <div className="text-sm font-bold">
+                  {String(item.action).replaceAll("_", " ")}
+                </div>
+                <div className="mt-1 text-[10px] text-slate-500">
+                  {item.actor || "Kivora automation"} ·{" "}
+                  {item.source || "Internal"}
+                </div>
+              </div>
+              <div className="text-[10px] text-slate-600">
+                {new Date(item.createdAt).toLocaleString()}
+              </div>
+            </div>
+          ))
+        ) : (
+          <Empty>No approved actions have been recorded.</Empty>
+        )}
+      </section>
+    </>
+  );
+}
 
-function Assistant(){const [question,setQuestion]=useState("");const [messages,setMessages]=useState<Array<{role:"user"|"assistant";text:string}>>([]);const ask=useMutation({mutationFn:askKivora,onSuccess:(result)=>setMessages((items)=>[...items,{role:"assistant",text:result.body}]),onError:(error)=>toast.error(error instanceof Error?error.message:"Kivora could not answer")});const submit=()=>{const value=question.trim();if(!value||ask.isPending)return;setMessages((items)=>[...items,{role:"user",text:value}]);setQuestion("");ask.mutate(value)};return <><Header eyebrow="Grounded Groq assistant" title="Ask Kivora" copy="Natural-language answers constrained to your latest Wheelhouse scan and stored external signals."/><section className="card overflow-hidden rounded-2xl"><div className="min-h-[360px] space-y-4 p-5">{messages.length?messages.map((message,index)=><div key={index} className={`flex ${message.role==="user"?"justify-end":"justify-start"}`}><div className={`max-w-2xl rounded-2xl px-4 py-3 text-sm leading-6 ${message.role==="user"?"bg-accent text-white":"border border-white/10 bg-white/[.03] text-slate-300"}`}>{message.text}</div></div>):<div className="grid min-h-[320px] place-items-center text-center"><div><Bot className="mx-auto text-accent"/><p className="mt-4 text-sm text-slate-400">Ask “What is my biggest revenue risk today?”</p></div></div>}</div><div className="flex gap-2 border-t border-white/8 p-4"><input value={question} onChange={(event)=>setQuestion(event.target.value)} onKeyDown={(event)=>event.key==="Enter"&&submit()} placeholder="Ask about your live portfolio…" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#0a0a0c] px-4 py-3 text-sm outline-none"/><button disabled={!question.trim()||ask.isPending} onClick={submit} className="rounded-xl bg-[#173f2e] px-5 text-xs font-bold text-white"><Send size={15}/></button></div></section></>}
+function Assistant() {
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState<
+    Array<{ role: "user" | "assistant"; text: string }>
+  >([]);
+  const ask = useMutation({
+    mutationFn: askKivora,
+    onSuccess: (result) =>
+      setMessages((items) => [
+        ...items,
+        { role: "assistant", text: result.body },
+      ]),
+    onError: (error) =>
+      toast.error(
+        error instanceof Error ? error.message : "Kivora could not answer",
+      ),
+  });
+  const submit = () => {
+    const value = question.trim();
+    if (!value || ask.isPending) return;
+    setMessages((items) => [...items, { role: "user", text: value }]);
+    setQuestion("");
+    ask.mutate(value);
+  };
+  return (
+    <>
+      <Header
+        eyebrow="Grounded revenue assistant"
+        title="Ask Kivora"
+        copy="Natural-language answers constrained to your latest portfolio scan and stored market signals."
+      />
+      <section className="card overflow-hidden rounded-2xl">
+        <div className="min-h-[360px] space-y-4 p-5">
+          {messages.length ? (
+            messages.map((message, index) => (
+              <div
+                key={index}
+                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-2xl rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === "user" ? "bg-accent text-white" : "border border-white/10 bg-white/[.03] text-slate-300"}`}
+                >
+                  {message.text}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="grid min-h-[320px] place-items-center text-center">
+              <div>
+                <Bot className="mx-auto text-accent" />
+                <p className="mt-4 text-sm text-slate-400">
+                  Ask “What is my biggest revenue risk today?”
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 border-t border-white/8 p-4">
+          <input
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            onKeyDown={(event) => event.key === "Enter" && submit()}
+            placeholder="Ask about your live portfolio…"
+            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#0a0a0c] px-4 py-3 text-sm outline-none"
+          />
+          <button
+            disabled={!question.trim() || ask.isPending}
+            onClick={submit}
+            className="rounded-xl bg-[#173f2e] px-5 text-xs font-bold text-white"
+          >
+            <Send size={15} />
+          </button>
+        </div>
+      </section>
+    </>
+  );
+}
 
-function Underwrite() { const [address, setAddress] = useState(""); const [marketId, setMarketId] = useState(""); const [cost, setCost] = useState(""); const [expenses, setExpenses] = useState(""); const mutation = useMutation({ mutationFn: underwriteProperty, onError: (error) => toast.error(error instanceof Error ? error.message : "Underwriting failed") }); const valid = address && Number(marketId) > 0 && Number(cost) > 0 && Number(expenses) >= 0; return <><Header eyebrow="Live market underwriting" title="Underwrite a deal" copy="Uses a real Wheelhouse market report and your explicit investment assumptions." /><section className="card rounded-3xl p-7"><div className="mb-5 flex items-center gap-2 font-bold"><House /> Acquisition inputs</div><div className="grid gap-3 md:grid-cols-4"><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Property address" className="rounded-xl border p-3" /><input value={marketId} onChange={(event) => setMarketId(event.target.value)} placeholder="Wheelhouse market ID" className="rounded-xl border p-3" /><input value={cost} onChange={(event) => setCost(event.target.value)} placeholder="Acquisition cost" className="rounded-xl border p-3" /><input value={expenses} onChange={(event) => setExpenses(event.target.value)} placeholder="Annual expenses" className="rounded-xl border p-3" /></div><button disabled={!valid || mutation.isPending} onClick={() => mutation.mutate({ address, marketId: Number(marketId), acquisitionCost: Number(cost), annualExpenses: Number(expenses) })} className="mt-4 rounded-xl bg-[#d8f45b] px-6 py-3 font-bold disabled:opacity-40">Analyze live market</button>{mutation.data && <div className="mt-7 grid gap-3 md:grid-cols-4">{[["Annual revenue", money(mutation.data.annualRevenue)], ["NOI", money(mutation.data.netOperatingIncome)], ["Occupancy", `${mutation.data.occupancy}%`], ["ROI", `${mutation.data.cashOnCashRoi}%`]].map(([label, value]) => <div key={label} className="rounded-xl border p-4"><small>{label}</small><div className="mt-2 text-xl font-bold">{value}</div></div>)}<div className="md:col-span-4 flex gap-2 rounded-xl bg-[#edf5ef] p-4"><ShieldCheck /> Source: {mutation.data.source}</div></div>}</section></>; }
+function Underwrite() {
+  const [address, setAddress] = useState("");
+  const [marketId, setMarketId] = useState("");
+  const [cost, setCost] = useState("");
+  const [expenses, setExpenses] = useState("");
+  const mutation = useMutation({
+    mutationFn: underwriteProperty,
+    onError: (error) =>
+      toast.error(
+        error instanceof Error ? error.message : "Underwriting failed",
+      ),
+  });
+  const valid =
+    address &&
+    Number(marketId) > 0 &&
+    Number(cost) > 0 &&
+    Number(expenses) >= 0;
+  return (
+    <>
+      <Header
+        eyebrow="Live market underwriting"
+        title="Underwrite a deal"
+        copy="Uses a live market report and your explicit investment assumptions."
+      />
+      <section className="card rounded-3xl p-7">
+        <div className="mb-5 flex items-center gap-2 font-bold">
+          <House /> Acquisition inputs
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          <input
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
+            placeholder="Property address"
+            className="rounded-xl border p-3"
+          />
+          <input
+            value={marketId}
+            onChange={(event) => setMarketId(event.target.value)}
+            placeholder="Market ID"
+            className="rounded-xl border p-3"
+          />
+          <input
+            value={cost}
+            onChange={(event) => setCost(event.target.value)}
+            placeholder="Acquisition cost"
+            className="rounded-xl border p-3"
+          />
+          <input
+            value={expenses}
+            onChange={(event) => setExpenses(event.target.value)}
+            placeholder="Annual expenses"
+            className="rounded-xl border p-3"
+          />
+        </div>
+        <button
+          disabled={!valid || mutation.isPending}
+          onClick={() =>
+            mutation.mutate({
+              address,
+              marketId: Number(marketId),
+              acquisitionCost: Number(cost),
+              annualExpenses: Number(expenses),
+            })
+          }
+          className="mt-4 rounded-xl bg-[#d8f45b] px-6 py-3 font-bold disabled:opacity-40"
+        >
+          Analyze live market
+        </button>
+        {mutation.data && (
+          <div className="mt-7 grid gap-3 md:grid-cols-4">
+            {[
+              ["Annual revenue", money(mutation.data.annualRevenue)],
+              ["NOI", money(mutation.data.netOperatingIncome)],
+              ["Occupancy", `${mutation.data.occupancy}%`],
+              ["ROI", `${mutation.data.cashOnCashRoi}%`],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border p-4">
+                <small>{label}</small>
+                <div className="mt-2 text-xl font-bold">{value}</div>
+              </div>
+            ))}
+            <div className="md:col-span-4 flex gap-2 rounded-xl bg-[#edf5ef] p-4">
+              <ShieldCheck /> Verified live market analysis
+            </div>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
