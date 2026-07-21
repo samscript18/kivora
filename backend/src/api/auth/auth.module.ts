@@ -7,6 +7,7 @@ import { PrivyAuthGuard } from "./guards/privy-auth.guard";
 import { User, UserSchema } from "./schemas/user.schema";
 import { Membership, MembershipSchema } from "./schemas/membership.schema";
 import { Organization, OrganizationSchema } from "./schemas/organization.schema";
+import { Invitation, InvitationSchema } from "./schemas/invitation.schema";
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { Organization, OrganizationSchema } from "./schemas/organization.schema"
       { name: User.name, schema: UserSchema },
       { name: Organization.name, schema: OrganizationSchema },
       { name: Membership.name, schema: MembershipSchema },
+      { name: Invitation.name, schema: InvitationSchema },
     ]),
   ],
   controllers: [AuthController],
