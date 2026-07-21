@@ -4,7 +4,7 @@ import { ApprovalGuard } from "../auth/guards/approval.guard";
 import { AuthenticatedUser, PrivyAuthGuard } from "../auth/guards/privy-auth.guard";
 import { TelegramService } from "../integrations/services/telegram.service";
 import { CurrentUser } from "../../shared/decorators/current-user.decorator";
-import { AskDto, ResolveDto, StrategyDto, UnderwriteDto } from "./dto/revenue.dto";
+import { AskDto, StrategyDto, UnderwriteDto } from "./dto/revenue.dto";
 import { RevenueService } from "./revenue.service";
 
 @Controller()
@@ -20,7 +20,7 @@ export class RevenueController {
   @Post("scan") @UseGuards(ApprovalGuard) scan() { return this.revenue.scanPortfolio(); }
   @Post("underwrite") @UseGuards(PrivyAuthGuard) underwrite(@Body() body: UnderwriteDto) { return this.revenue.underwrite(body.address, body.marketId, body.acquisitionCost, body.annualExpenses); }
   @Post("incidents/:id/preview") @UseGuards(PrivyAuthGuard) preview(@Param("id") id: string) { return this.revenue.preview(id); }
-  @Post("incidents/:id/resolve") @UseGuards(ApprovalGuard) resolve(@Param("id") id: string, @Body() body: ResolveDto) { return this.revenue.resolve(id, body.approvedBy || "Revenue manager"); }
+  @Post("incidents/:id/resolve") @UseGuards(ApprovalGuard) resolve(@Param("id") id: string, @CurrentUser() user?: AuthenticatedUser) { return this.revenue.resolve(id, user?.name || "Approved service"); }
 
   @Get("market-intelligence") @UseGuards(PrivyAuthGuard) marketIntelligence() { return this.revenue.getMarketIntelligence(); }
   @Post("market-intelligence/refresh") @UseGuards(ApprovalGuard) refreshMarketIntelligence() { return this.revenue.refreshMarketIntelligence(); }

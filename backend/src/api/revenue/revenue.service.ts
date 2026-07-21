@@ -18,6 +18,7 @@ type LiveIncident = {
   listing: string; location: string; currentRate: number; recommendedRate: number; revenueAtRisk: number;
   confidence: number; cause: string; detectedAt: string; status: string; explanation: string; factors: Factor[];
   preferences?: Preferences; owner?: string;
+  canPreview: boolean; canAutoResolve: boolean;
 };
 
 const metricAt = (value: unknown, key: string, period = "0_30") => {
@@ -57,7 +58,9 @@ export class RevenueService {
     if (!this.wheelhouse.configured) throw new ServiceUnavailableException("Wheelhouse is not configured");
     const listings = await this.wheelhouse.listings();
     this.listingsCache = listings;
-    const limit = Math.max(1, Math.min(16, this.config.get<number>("SCAN_BATCH_SIZE", 12)));
+    // Five Wheelhouse reads per listing plus pagination keeps the default scan below
+    // the documented 60-request/minute integration limit.
+    const limit = Math.max(1, Math.min(10, this.config.get<number>("SCAN_BATCH_SIZE", 10)));
     const batch = Array.from({ length: Math.min(limit, listings.length) }, (_, i) => listings[(this.scanCursor + i) % listings.length]);
     this.scanCursor = (this.scanCursor + batch.length) % Math.max(1, listings.length);
     const found: LiveIncident[] = [];
@@ -70,22 +73,28 @@ export class RevenueService {
     this.lastScan = new Date().toISOString();
     if (!this.lastIntelligenceRefresh || Date.now() - new Date(this.lastIntelligenceRefresh).getTime() > 60 * 60_000) {
       try {
-        await this.market.refresh(listings);
+        await this.refreshIntelligenceFor(listings);
         this.lastIntelligenceRefresh = new Date().toISOString();
       } catch {
         this.lastIntelligenceRefresh = undefined;
       }
     }
     for (const incident of found) {
-      await this.incidents.findOneAndUpdate({ externalId: incident.externalId }, { $set: { listingId: incident.listingId, channel: incident.channel, listing: incident.listing, title: incident.title, cause: incident.cause, severity: incident.severity, revenueAtRisk: incident.revenueAtRisk, confidence: incident.confidence, status: "open", evidence: { location: incident.location, currentRate: incident.currentRate, recommendedRate: incident.recommendedRate, explanation: incident.explanation, factors: incident.factors } } }, { upsert: true });
-      if (this.telegram.configured) await this.telegram.notifyIncident(incident);
+      const previous = await this.incidents.findOneAndUpdate({ externalId: incident.externalId }, { $set: { listingId: incident.listingId, channel: incident.channel, listing: incident.listing, title: incident.title, cause: incident.cause, severity: incident.severity, revenueAtRisk: incident.revenueAtRisk, confidence: incident.confidence, status: "open", evidence: { location: incident.location, currentRate: incident.currentRate, recommendedRate: incident.recommendedRate, explanation: incident.explanation, factors: incident.factors, canPreview: incident.canPreview, canAutoResolve: incident.canAutoResolve } } }, { upsert: true, new: false }).lean();
+      if (this.telegram.configured && (!previous || previous.status !== "open")) await this.telegram.notifyIncident(incident);
     }
     await this.incidents.updateMany({ listingId: { $in: [...scannedIds] }, externalId: { $nin: found.map((incident) => incident.externalId) }, status: "open" }, { $set: { status: "resolved" } });
     return { source: "Wheelhouse live", scanned: batch.length, total: listings.length, incidents: found.length, nextCursor: this.scanCursor };
   }
 
   private async analyzeListing(listing: WheelhouseListing): Promise<LiveIncident | null> {
-    const [preferences, recommendations, kpis] = await Promise.all([this.wheelhouse.preferences(listing.id, listing.channel), this.wheelhouse.recommendations(listing.id, listing.channel), this.wheelhouse.kpis(listing.id, listing.channel)]);
+    const [preferences, recommendations, kpis, changesResult, flagsResult] = await Promise.all([
+      this.wheelhouse.preferences(listing.id, listing.channel),
+      this.wheelhouse.recommendations(listing.id, listing.channel),
+      this.wheelhouse.kpis(listing.id, listing.channel),
+      this.wheelhouse.recentChanges(listing.id, listing.channel).catch(() => undefined),
+      this.wheelhouse.flags(listing.id, listing.channel).catch(() => []),
+    ]);
     const base = Number(preferences.base_price ?? recommendations.base_price ?? 0);
     const recommended = Number(recommendations.base_price_recommended ?? 0);
     const posting = preferences.automatic_rate_posting_enabled ?? recommendations.automatic_rate_posting_enabled ?? true;
@@ -101,12 +110,32 @@ export class RevenueService {
     const marketGap = Math.max(0, marketOccupancy - occupancy);
     const health = Math.max(0, Math.min(100, Math.round(100 - (posting ? 0 : 30) - Math.max(0, divergence) * 45 - marketGap * 30)));
     await this.snapshots.create({ listingId: listing.id, channel: listing.channel, health, occupancy, adr, revenue, revpar, pickup, marketOccupancy, compSetOccupancy, revenueScore, raw: { kpis } });
-    if (posting && divergence < 0.3) return null;
-    const cause = !posting ? "Dynamic pricing disabled" : "Manual base price override";
+    const serializedFlags = JSON.stringify(flagsResult).toLowerCase();
+    const calendarFlag = /(calendar|sync|channel).*(error|fail|stale|disconnect)|(?:error|fail|stale|disconnect).*(calendar|sync|channel)/.test(serializedFlags);
+    const slowPace = marketOccupancy > 0 && marketGap >= 0.2;
+    const materiallyUnderpriced = divergence >= 0.15;
+    const materiallyOverpriced = divergence <= -0.2;
+    if (posting && !materiallyUnderpriced && !materiallyOverpriced && !calendarFlag && !slowPace) return null;
+    const cause = !posting
+      ? "Dynamic pricing disabled"
+      : calendarFlag
+        ? "Calendar synchronization issue"
+        : materiallyUnderpriced
+          ? "Listing underpriced versus Wheelhouse"
+          : materiallyOverpriced
+            ? "Listing overpriced versus Wheelhouse"
+            : "Booking pace below market";
+    const pricingIncident = !posting || materiallyUnderpriced || materiallyOverpriced;
     const affected = Math.min(30, recommendations.data?.length ?? 0);
-    const atRisk = Math.max(0, Math.round((recommended - base) * affected * Math.max(0.35, occupancy || 0)));
-    const suffix = !posting ? "posting-disabled" : "base-override";
-    return { id: `${listing.id}-${suffix}`, externalId: `${listing.id}-${suffix}`, listingId: listing.id, channel: listing.channel, severity: atRisk > 3000 ? "Critical" : "Warning", title: !posting ? "Dynamic pricing is not posting" : "Manual base price suppressing market demand", listing: listing.nickname || listing.title || listing.id, location: listing.location?.address || listing.location?.country || "Unknown", currentRate: base, recommendedRate: recommended, revenueAtRisk: atRisk, confidence: Math.min(99, Math.round(80 + Math.abs(divergence) * 20)), cause, detectedAt: new Date().toISOString(), status: "open", explanation: `${cause} is preventing Wheelhouse's recommendation from controlling the effective base rate.`, factors: [{ label: "Base price gap", value: `${Math.round(divergence * 100)}%`, note: "vs Wheelhouse" }, { label: "30-day occupancy", value: `${Math.round(occupancy * 100)}%`, note: "rolling KPI" }, { label: "Automatic posting", value: posting ? "On" : "Off", note: "pricing preference" }], preferences, owner: listing.owner_name };
+    const pricingExposure = Math.abs(recommended - base) * Math.max(1, affected) * Math.max(0.35, occupancy || marketOccupancy || 0);
+    const paceExposure = Math.max(0, marketGap) * Math.max(recommended, adr, 1) * 30;
+    const atRisk = Math.max(0, Math.round(pricingIncident ? pricingExposure : paceExposure));
+    const suffix = !posting ? "posting-disabled" : calendarFlag ? "calendar-sync" : materiallyUnderpriced ? "underpriced" : materiallyOverpriced ? "overpriced" : "slow-pace";
+    const title = !posting ? "Dynamic pricing is not posting" : calendarFlag ? "Calendar synchronization needs attention" : materiallyUnderpriced ? "Base price is below Wheelhouse guidance" : materiallyOverpriced ? "Base price may be suppressing occupancy" : "Booking pace is trailing the local market";
+    const explanation = pricingIncident
+      ? `${cause} is preventing Wheelhouse's recommendation from controlling the effective base rate.`
+      : `${cause} was verified from current Wheelhouse flags and rolling market KPIs. Kivora will not change pricing automatically for this issue.`;
+    return { id: `${listing.id}-${suffix}`, externalId: `${listing.id}-${suffix}`, listingId: listing.id, channel: listing.channel, severity: atRisk > 3000 || calendarFlag ? "Critical" : "Warning", title, listing: listing.nickname || listing.title || listing.id, location: listing.location?.address || listing.location?.country || "Unknown", currentRate: base, recommendedRate: recommended, revenueAtRisk: atRisk, confidence: Math.min(99, Math.round(78 + Math.abs(divergence) * 20 + (calendarFlag ? 8 : 0))), cause, detectedAt: new Date().toISOString(), status: "open", explanation, factors: [{ label: "Base price gap", value: `${Math.round(divergence * 100)}%`, note: "vs Wheelhouse" }, { label: "30-day occupancy", value: `${Math.round(occupancy * 100)}%`, note: "rolling KPI" }, { label: "Market occupancy", value: `${Math.round(marketOccupancy * 100)}%`, note: "neighborhood KPI" }, { label: "Automatic posting", value: posting ? "On" : "Off", note: "pricing preference" }, { label: "Recent rate change", value: changesResult?.rates || "Unknown", note: "Wheelhouse" }], preferences, owner: listing.owner_name, canPreview: pricingIncident, canAutoResolve: pricingIncident };
   }
 
   async dashboard() {
@@ -128,7 +157,7 @@ export class RevenueService {
     ]);
     const activity = await this.audits.find().sort({ createdAt: -1 }).limit(6).lean();
     const priorities = [
-      ...incidents.map((incident) => ({ id: incident.id, kind: "incident", title: incident.title, property: incident.listing, impact: incident.revenueAtRisk, confidence: incident.confidence, action: incident.cause === "Dynamic pricing disabled" ? "Restore automatic posting" : "Review base-price override" })),
+      ...incidents.map((incident) => ({ id: incident.id, kind: "incident", title: incident.title, property: incident.listing, impact: incident.revenueAtRisk, confidence: incident.confidence, action: incident.canAutoResolve ? "Run a live preview and review the fix" : "Review the verified operational signal" })),
       ...signals.slice(0, 8).map((signal) => ({ id: signal.externalId, kind: signal.kind, title: signal.title, property: signal.location, impact: null, confidence: signal.confidence, action: "Review demand signal" })),
     ].sort((a, b) => (b.impact ?? b.confidence * 10) - (a.impact ?? a.confidence * 10));
     return {
@@ -154,7 +183,7 @@ export class RevenueService {
   }
 
   async getOpportunities() { return this.toOpportunities(await this.getIncidents()); }
-  private toOpportunities(items: LiveIncident[]) { return items.map((item) => ({ id: item.id, property: item.listing, action: item.cause === "Dynamic pricing disabled" ? "Restore automatic rate posting" : "Remove the manual base-price override", impact: item.revenueAtRisk, confidence: item.confidence, tag: "Live incident" })); }
+  private toOpportunities(items: LiveIncident[]) { return items.map((item) => ({ id: item.id, property: item.listing, action: item.canAutoResolve ? "Restore Wheelhouse dynamic pricing" : `Review ${item.cause.toLowerCase()}`, impact: item.revenueAtRisk, confidence: item.confidence, tag: item.canAutoResolve ? "Approval ready" : "Review required", canPreview: item.canPreview })); }
 
   getBriefs() { return this.briefs.find().sort({ createdAt: -1 }).limit(50).lean(); }
   getReports() { return this.reports.find().sort({ createdAt: -1 }).limit(50).lean(); }
@@ -163,8 +192,19 @@ export class RevenueService {
 
   async refreshMarketIntelligence() {
     if (!this.listingsCache.length) this.listingsCache = await this.wheelhouse.listings();
-    const result = await this.market.refresh(this.listingsCache);
+    const result = await this.refreshIntelligenceFor(this.listingsCache);
     this.lastIntelligenceRefresh = new Date().toISOString();
+    return result;
+  }
+
+  private async refreshIntelligenceFor(listings: WheelhouseListing[]) {
+    const before = new Set((await this.market.list()).map((signal) => signal.externalId));
+    const result = await this.market.refresh(listings);
+    if (this.telegram.configured) {
+      const after = await this.market.list();
+      const fresh = after.filter((signal) => !before.has(signal.externalId));
+      await Promise.allSettled(fresh.slice(0, 10).map((signal) => this.telegram.notifyMarketSignal(signal)));
+    }
     return result;
   }
 
@@ -234,6 +274,7 @@ export class RevenueService {
   async preview(id: string) {
     const current = this.incidentsCache.find((item) => item.id === id);
     if (!current) throw new NotFoundException("Incident not found");
+    if (!current.canPreview) throw new ServiceUnavailableException("This operational incident requires manual review and has no safe pricing preview");
     const preferences = current.preferences ?? await this.wheelhouse.preferences(current.listingId, current.channel);
     const proposed = { ...preferences, base_price: null, automatic_rate_posting_enabled: true };
     const [before, after] = await Promise.all([this.wheelhouse.recommendations(current.listingId, current.channel), this.wheelhouse.preview(current.listingId, current.channel, proposed)]);
@@ -244,6 +285,7 @@ export class RevenueService {
   async resolve(id: string, actor: string) {
     const current = this.incidentsCache.find((item) => item.id === id);
     if (!current) throw new NotFoundException("Incident not found");
+    if (!current.canAutoResolve) throw new ServiceUnavailableException("This incident cannot be resolved through an automatic pricing mutation");
     const generated = await this.groq.ownerBrief({ owner: current.owner, listing: current.listing, cause: current.cause, impact: current.revenueAtRisk, action: "We restored Wheelhouse dynamic pricing and queued a channel synchronization." });
     const before = current.preferences ?? await this.wheelhouse.preferences(current.listingId, current.channel);
     const after = { ...before, base_price: null, automatic_rate_posting_enabled: true };

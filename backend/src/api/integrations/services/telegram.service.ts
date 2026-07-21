@@ -138,11 +138,23 @@ export class TelegramService {
     return { delivered: results.filter((result) => result.status === "fulfilled").length, recipients: recipients.length };
   }
 
-  dailyBriefing(chatId: string, summary: { health: number; revenue: number; atRisk: number; opportunities: number }) {
-    return this.sendToChat(chatId, `Good morning.\n\nPortfolio health: ${summary.health}/100\nRevenue: $${summary.revenue.toLocaleString()}\nRevenue at risk: $${summary.atRisk.toLocaleString()}\nOpportunities: ${summary.opportunities}`);
+  async notifyMarketSignal(signal: { kind: string; title: string; location?: string; affectedListings: number; confidence: number }) {
+    this.requireToken();
+    const recipients = await this.connections.find({ enabled: true }).select("chatId").lean();
+    if (!recipients.length) return { delivered: 0, recipients: 0 };
+    const icon = signal.kind === "weather" ? "🌦️" : "🎟️";
+    const text = `${icon} Kivora market signal\n\n${signal.title}\n${signal.location || "Connected portfolio"}\nAffected listings: ${signal.affectedListings}\nConfidence: ${signal.confidence}%`;
+    const markup = { inline_keyboard: [[{ text: "Open Revenue War Room", url: `${this.frontendUrl.replace(/\/$/, "")}/dashboard` }]] };
+    const results = await Promise.allSettled(recipients.map((recipient) => this.sendToChat(recipient.chatId, text, markup)));
+    return { delivered: results.filter((result) => result.status === "fulfilled").length, recipients: recipients.length };
   }
 
-  async broadcastBriefing(summary: { health: number; revenue: number; atRisk: number; opportunities: number }) {
+  dailyBriefing(chatId: string, summary: { health: number; revenue: number; atRisk: number; opportunities: number; criticalIncidents?: number; marketSignals?: number }) {
+    const text = `🌅 Good morning.\n\nPortfolio health: ${summary.health}/100\nRevenue: $${summary.revenue.toLocaleString()}\nRevenue at risk: $${summary.atRisk.toLocaleString()}\nOpportunities: ${summary.opportunities}\nCritical incidents: ${summary.criticalIncidents ?? 0}\nMarket signals: ${summary.marketSignals ?? 0}`;
+    return this.sendToChat(chatId, text, { inline_keyboard: [[{ text: "Open AI Revenue War Room", url: `${this.frontendUrl.replace(/\/$/, "")}/dashboard` }]] });
+  }
+
+  async broadcastBriefing(summary: { health: number; revenue: number; atRisk: number; opportunities: number; criticalIncidents?: number; marketSignals?: number }) {
     const recipients = await this.connections.find({ enabled: true }).select("chatId").lean();
     const results = await Promise.allSettled(recipients.map((recipient) => this.dailyBriefing(recipient.chatId, summary)));
     return { recipients: recipients.length, delivered: results.filter((result) => result.status === "fulfilled").length };

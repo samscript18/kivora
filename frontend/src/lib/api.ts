@@ -32,7 +32,7 @@ export const getOpportunities = () => unwrap(api.get<Envelope<any[]>>("/opportun
 export const getBriefs = () => unwrap(api.get<Envelope<any[]>>("/owner-briefs"));
 export const getCapabilities = () => unwrap(api.get<Envelope<any>>("/capabilities"));
 export const previewIncident = (id: string) => unwrap(api.post<Envelope<any>>(`/incidents/${id}/preview`));
-export const resolveIncident = (id: string) => unwrap(api.post<Envelope<any>>(`/incidents/${id}/resolve`, { approvedBy: "Revenue manager" }));
+export const resolveIncident = (id: string) => unwrap(api.post<Envelope<any>>(`/incidents/${id}/resolve`));
 export const underwriteProperty = (input: { address: string; marketId: number; acquisitionCost: number; annualExpenses: number }) => unwrap(api.post<Envelope<any>>("/underwrite", input));
 export const sendBrief = (id: string) => unwrap(api.post<Envelope<any>>(`/owner-briefs/${id}/send`));
 export const getTelegramStatus = () => unwrap(api.get<Envelope<{ botConfigured: boolean; connected: boolean; connection: { username?: string; firstName?: string; chatType?: string; linkedAt?: string } | null }>>("/telegram/status"));

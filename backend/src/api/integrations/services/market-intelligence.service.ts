@@ -36,11 +36,22 @@ export class MarketIntelligenceService {
     const clusters = this.clusters(listings).slice(0, 8);
     let events = 0;
     let weather = 0;
+    const errors: Array<{ provider: string; location: string; message: string }> = [];
     for (const cluster of clusters) {
-      if (this.ticketmasterKey) events += await this.refreshEvents(cluster);
-      if (this.weatherKey) weather += await this.refreshWeather(cluster);
+      const tasks: Array<{ provider: string; run: () => Promise<number> }> = [];
+      if (this.ticketmasterKey) tasks.push({ provider: "Ticketmaster", run: () => this.refreshEvents(cluster) });
+      if (this.weatherKey) tasks.push({ provider: "OpenWeather", run: () => this.refreshWeather(cluster) });
+      const results = await Promise.allSettled(tasks.map((task) => task.run()));
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          if (tasks[index].provider === "Ticketmaster") events += result.value;
+          else weather += result.value;
+        } else {
+          errors.push({ provider: tasks[index].provider, location: cluster.location, message: result.reason instanceof Error ? result.reason.message : "request failed" });
+        }
+      });
     }
-    return { source: "live external APIs", clusters: clusters.length, events, weather, capabilities: this.capabilities() };
+    return { source: "live external APIs", clusters: clusters.length, events, weather, errors, capabilities: this.capabilities() };
   }
 
   list() { return this.signals.find({ expiresAt: { $gt: new Date() } }).sort({ startsAt: 1, confidence: -1 }).limit(100).lean(); }

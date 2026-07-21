@@ -136,6 +136,7 @@ export function Dashboard() {
 	const { data, isLoading, error } = useQuery({ queryKey: ["dashboard"], queryFn: getDashboard, retry: 1 });
 	const [menu, setMenu] = useState(false);
 	const [open, setOpen] = useState(false);
+	const [selectedIncident, setSelectedIncident] = useState<any>(null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [active, setActive] = useState<WorkspaceView>("Overview");
 	if (isLoading)
@@ -208,7 +209,7 @@ export function Dashboard() {
 						</div>
 						<div className="mt-5">
 							{data.incident ? (
-								<IncidentPanel incident={data.incident} onOpen={() => setOpen(true)} />
+								<IncidentPanel incident={data.incident} onOpen={() => { setSelectedIncident(data.incident); setOpen(true); }} />
 							) : (
 								<div className="card rounded-2xl p-6 text-sm text-[#68736d]">No open incidents in the latest live scan.</div>
 							)}
@@ -299,11 +300,11 @@ export function Dashboard() {
 						</section>
 					</div>
 				) : (
-					<ProductView view={active} onIncident={() => setOpen(true)} />
+					<ProductView view={active} onIncident={(incident) => { setSelectedIncident(incident); setOpen(true); }} />
 				)}
 			</main>
 			<TelegramSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-			{data.incident && <IncidentDrawer open={open} onClose={() => setOpen(false)} incident={data.incident} />}
+			{(selectedIncident || data.incident) && <IncidentDrawer open={open} onClose={() => setOpen(false)} incident={selectedIncident || data.incident} />}
 		</div>
 	);
 }
@@ -449,13 +450,15 @@ function IncidentDrawer({ open, onClose, incident }: { open: boolean; onClose: (
 										</motion.div>
 									)}
 									<div className="mt-8 border-t border-[#e5e8e6] pt-5">
-										{stage === "analysis" ? (
+										{stage === "analysis" && incident.canPreview !== false ? (
 											<button
 												onClick={() => preview.mutate()}
 												className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#173f2e] py-3.5 text-[11px] font-bold text-white"
 											>
 												<Zap size={14} /> Run live Wheelhouse preview
 											</button>
+										) : stage === "analysis" ? (
+											<div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-center text-[10px] text-amber-300">This incident requires a manual operational review. Kivora will not make an unrelated pricing change.</div>
 										) : stage === "result" ? (
 											<button
 												disabled={fix.isPending}
