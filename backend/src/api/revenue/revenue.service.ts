@@ -3,11 +3,13 @@ import { ConfigService } from "@nestjs/config";
 import { InjectConnection, InjectModel } from "@nestjs/mongoose";
 import { Connection, Model } from "mongoose";
 import { GroqService } from "../integrations/services/groq.service";
+import { MarketIntelligenceService } from "../integrations/services/market-intelligence.service";
 import { TelegramService } from "../integrations/services/telegram.service";
 import { Preferences, RecommendationResponse, WheelhouseListing, WheelhouseService } from "../integrations/services/wheelhouse.service";
 import { AuditLog } from "./schemas/audit-log.schema";
 import { Incident } from "./schemas/incident.schema";
 import { OwnerBrief } from "./schemas/owner-brief.schema";
+import { Report } from "./schemas/report.schema";
 import { Snapshot } from "./schemas/snapshot.schema";
 
 type Factor = { label: string; value: string; note: string };
@@ -30,11 +32,13 @@ export class RevenueService {
   private listingsCache: WheelhouseListing[] = [];
   private incidentsCache: LiveIncident[] = [];
   private lastScan?: string;
+  private lastIntelligenceRefresh?: string;
   private scanCursor = 0;
 
   constructor(
     private readonly wheelhouse: WheelhouseService,
     private readonly groq: GroqService,
+    private readonly market: MarketIntelligenceService,
     private readonly telegram: TelegramService,
     private readonly config: ConfigService,
     @InjectConnection() private readonly connection: Connection,
@@ -42,17 +46,18 @@ export class RevenueService {
     @InjectModel(Incident.name) private readonly incidents: Model<Incident>,
     @InjectModel(Snapshot.name) private readonly snapshots: Model<Snapshot>,
     @InjectModel(OwnerBrief.name) private readonly briefs: Model<OwnerBrief>,
+    @InjectModel(Report.name) private readonly reports: Model<Report>,
   ) {}
 
   capabilities() {
-    return { wheelhouse: this.wheelhouse.capabilities(), telegram: this.telegram.capabilities(), ai: this.groq.capabilities(), database: { configured: Boolean(this.config.get("MONGODB_URI")), connected: this.connection.readyState === 1 }, lastScan: this.lastScan ?? null };
+    return { wheelhouse: this.wheelhouse.capabilities(), marketIntelligence: this.market.capabilities(), telegram: this.telegram.capabilities(), ai: this.groq.capabilities(), database: { configured: Boolean(this.config.get("MONGODB_URI")), connected: this.connection.readyState === 1 }, lastScan: this.lastScan ?? null, lastIntelligenceRefresh: this.lastIntelligenceRefresh ?? null };
   }
 
   async scanPortfolio() {
     if (!this.wheelhouse.configured) throw new ServiceUnavailableException("Wheelhouse is not configured");
     const listings = await this.wheelhouse.listings();
     this.listingsCache = listings;
-    const limit = Math.max(1, Math.min(20, this.config.get<number>("SCAN_BATCH_SIZE", 12)));
+    const limit = Math.max(1, Math.min(16, this.config.get<number>("SCAN_BATCH_SIZE", 12)));
     const batch = Array.from({ length: Math.min(limit, listings.length) }, (_, i) => listings[(this.scanCursor + i) % listings.length]);
     this.scanCursor = (this.scanCursor + batch.length) % Math.max(1, listings.length);
     const found: LiveIncident[] = [];
@@ -63,6 +68,14 @@ export class RevenueService {
     const scannedIds = new Set(batch.map((listing) => listing.id));
     this.incidentsCache = [...this.incidentsCache.filter((incident) => !scannedIds.has(incident.listingId)), ...found];
     this.lastScan = new Date().toISOString();
+    if (!this.lastIntelligenceRefresh || Date.now() - new Date(this.lastIntelligenceRefresh).getTime() > 60 * 60_000) {
+      try {
+        await this.market.refresh(listings);
+        this.lastIntelligenceRefresh = new Date().toISOString();
+      } catch {
+        this.lastIntelligenceRefresh = undefined;
+      }
+    }
     for (const incident of found) {
       await this.incidents.findOneAndUpdate({ externalId: incident.externalId }, { $set: { listingId: incident.listingId, channel: incident.channel, listing: incident.listing, title: incident.title, cause: incident.cause, severity: incident.severity, revenueAtRisk: incident.revenueAtRisk, confidence: incident.confidence, status: "open", evidence: { location: incident.location, currentRate: incident.currentRate, recommendedRate: incident.recommendedRate, explanation: incident.explanation, factors: incident.factors } } }, { upsert: true });
       if (this.telegram.configured) await this.telegram.notifyIncident(incident);
@@ -79,9 +92,15 @@ export class RevenueService {
     const occupancy = metricAt(kpis, "occupancy");
     const adr = metricAt(kpis, "adr");
     const revenue = metricAt(kpis, "revenue");
+    const revpar = metricAt(kpis, "revpar");
+    const pickup = metricAt(kpis, "pickup", "30_0");
+    const marketOccupancy = metricAt(kpis, "occupancy_neighborhood");
+    const compSetOccupancy = metricAt(kpis, "comp_set_occupancy");
+    const revenueScore = metricAt(kpis, "revenue_score");
     const divergence = recommended > 0 && base > 0 ? (recommended - base) / recommended : 0;
-    const health = Math.max(0, Math.round(100 - (posting ? 0 : 30) - Math.max(0, divergence) * 45));
-    await this.snapshots.create({ listingId: listing.id, channel: listing.channel, health, occupancy, adr, revenue, raw: { kpis } });
+    const marketGap = Math.max(0, marketOccupancy - occupancy);
+    const health = Math.max(0, Math.min(100, Math.round(100 - (posting ? 0 : 30) - Math.max(0, divergence) * 45 - marketGap * 30)));
+    await this.snapshots.create({ listingId: listing.id, channel: listing.channel, health, occupancy, adr, revenue, revpar, pickup, marketOccupancy, compSetOccupancy, revenueScore, raw: { kpis } });
     if (posting && divergence < 0.3) return null;
     const cause = !posting ? "Dynamic pricing disabled" : "Manual base price override";
     const affected = Math.min(30, recommendations.data?.length ?? 0);
@@ -94,11 +113,31 @@ export class RevenueService {
     if (!this.lastScan) await this.scanPortfolio();
     const snapshots = await this.snapshots.find().sort({ createdAt: -1 }).limit(Math.max(this.listingsCache.length, 1)).lean();
     const incidents = this.incidentsCache;
+    const signals = await this.market.list();
     const revenue = snapshots.reduce((sum, item) => sum + (item.revenue || 0), 0);
     const occupancy = snapshots.length ? snapshots.reduce((sum, item) => sum + (item.occupancy || 0), 0) / snapshots.length : 0;
     const health = snapshots.length ? Math.round(snapshots.reduce((sum, item) => sum + (item.health || 0), 0) / snapshots.length) : 0;
     const opportunities = this.toOpportunities(incidents);
-    return { source: "Wheelhouse live", capabilities: this.capabilities(), summary: { health, revenue, atRisk: incidents.reduce((sum, item) => sum + item.revenueAtRisk, 0), opportunities: opportunities.length, occupancy: Number((occupancy * 100).toFixed(1)) }, trend: [], incident: incidents[0] ?? null, opportunities, activity: [{ title: "Live portfolio scan completed", meta: `${this.listingsCache.length} Wheelhouse listings`, time: this.lastScan }] };
+    const trend = await this.snapshots.aggregate([
+      { $match: { createdAt: { $gte: new Date(Date.now() - 14 * 86_400_000) } } },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: { day: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, listingId: "$listingId" }, revenue: { $first: "$revenue" } } },
+      { $group: { _id: "$_id.day", revenue: { $sum: "$revenue" } } },
+      { $sort: { _id: 1 } },
+      { $project: { _id: 0, day: "$_id", revenue: 1 } },
+    ]);
+    const activity = await this.audits.find().sort({ createdAt: -1 }).limit(6).lean();
+    const priorities = [
+      ...incidents.map((incident) => ({ id: incident.id, kind: "incident", title: incident.title, property: incident.listing, impact: incident.revenueAtRisk, confidence: incident.confidence, action: incident.cause === "Dynamic pricing disabled" ? "Restore automatic posting" : "Review base-price override" })),
+      ...signals.slice(0, 8).map((signal) => ({ id: signal.externalId, kind: signal.kind, title: signal.title, property: signal.location, impact: null, confidence: signal.confidence, action: "Review demand signal" })),
+    ].sort((a, b) => (b.impact ?? b.confidence * 10) - (a.impact ?? a.confidence * 10));
+    return {
+      source: "Wheelhouse live",
+      capabilities: this.capabilities(),
+      summary: { health, revenue, atRisk: incidents.reduce((sum, item) => sum + item.revenueAtRisk, 0), opportunities: opportunities.length, occupancy: Number((occupancy * 100).toFixed(1)), criticalIncidents: incidents.filter((item) => item.severity === "Critical").length, marketSignals: signals.length },
+      trend, incident: incidents[0] ?? null, opportunities, priorities, signals,
+      activity: activity.length ? activity.map((item: any) => ({ title: item.action.replaceAll("_", " "), meta: item.actor || item.source || "Kivora", time: item.createdAt })) : [{ title: "Live portfolio scan completed", meta: `${this.listingsCache.length} Wheelhouse listings`, time: this.lastScan }],
+    };
   }
 
   async portfolio() {
@@ -118,6 +157,72 @@ export class RevenueService {
   private toOpportunities(items: LiveIncident[]) { return items.map((item) => ({ id: item.id, property: item.listing, action: item.cause === "Dynamic pricing disabled" ? "Restore automatic rate posting" : "Remove the manual base-price override", impact: item.revenueAtRisk, confidence: item.confidence, tag: "Live incident" })); }
 
   getBriefs() { return this.briefs.find().sort({ createdAt: -1 }).limit(50).lean(); }
+  getReports() { return this.reports.find().sort({ createdAt: -1 }).limit(50).lean(); }
+  getActivity() { return this.audits.find().sort({ createdAt: -1 }).limit(100).lean(); }
+  getMarketIntelligence() { return this.market.list(); }
+
+  async refreshMarketIntelligence() {
+    if (!this.listingsCache.length) this.listingsCache = await this.wheelhouse.listings();
+    const result = await this.market.refresh(this.listingsCache);
+    this.lastIntelligenceRefresh = new Date().toISOString();
+    return result;
+  }
+
+  async strategies(listingId: string) {
+    if (!this.listingsCache.length) this.listingsCache = await this.wheelhouse.listings();
+    const listing = this.listingsCache.find((item) => item.id === listingId);
+    if (!listing) throw new NotFoundException("Listing not found in the connected Wheelhouse portfolio");
+    const [preferences, current] = await Promise.all([this.wheelhouse.preferences(listing.id, listing.channel), this.wheelhouse.recommendations(listing.id, listing.channel)]);
+    const options = [
+      { key: "conservative", label: "Conservative", basePrice: current.base_price_conservative ?? current.base_price_recommended ?? current.base_price },
+      { key: "balanced", label: "Balanced", basePrice: current.base_price_recommended ?? current.base_price },
+      { key: "aggressive", label: "Aggressive", basePrice: current.base_price_aggressive ?? current.base_price_recommended ?? current.base_price },
+    ];
+    const currentRevenue = this.total(current);
+    const previews = await Promise.all(options.map(async (option) => {
+      if (!option.basePrice) return { ...option, available: false, reason: "Wheelhouse did not return this base-price option" };
+      const preview = await this.wheelhouse.preview(listing.id, listing.channel, { ...preferences, base_price: Math.round(option.basePrice), automatic_rate_posting_enabled: true });
+      const projectedRevenue = this.total(preview);
+      return { ...option, available: true, projectedRevenue, estimatedUplift: projectedRevenue - currentRevenue, horizonDays: Math.min(30, preview.data?.length ?? 0), source: "Wheelhouse live non-mutating preview" };
+    }));
+    return { listing: { id: listing.id, channel: listing.channel, name: listing.nickname || listing.title || listing.id }, currentRevenue, strategies: previews, mutated: false };
+  }
+
+  async applyStrategy(listingId: string, strategy: "conservative" | "balanced" | "aggressive", actor: string) {
+    if (!this.listingsCache.length) this.listingsCache = await this.wheelhouse.listings();
+    const listing = this.listingsCache.find((item) => item.id === listingId);
+    if (!listing) throw new NotFoundException("Listing not found in the connected Wheelhouse portfolio");
+    const before = await this.wheelhouse.preferences(listing.id, listing.channel);
+    const type = ({ conservative: "CON", balanced: "REC", aggressive: "AGG" } as const)[strategy];
+    await this.wheelhouse.updateSetting(listing.id, listing.channel, "base_price_adjustment", { type });
+    await this.wheelhouse.sync(listing.id, listing.channel);
+    const after = await this.wheelhouse.preferences(listing.id, listing.channel);
+    await this.audits.create({ action: "apply_pricing_strategy", actor, before, after, source: "Wheelhouse RM API", verified: true });
+    return { listingId, strategy, preset: type, status: "applied", sync: "queued", source: "Wheelhouse live" };
+  }
+
+  async segments() { return { source: "Wheelhouse live", segments: await this.wheelhouse.segments() }; }
+  async segment(id: number) { const [listings, metrics] = await Promise.all([this.wheelhouse.segmentListings(id), this.wheelhouse.segmentMetrics(id)]); return { source: "Wheelhouse live", id, listings, metrics }; }
+
+  async generateExecutiveReport(actor: string) {
+    const dashboard = await this.dashboard();
+    const facts = { generatedAt: new Date().toISOString(), summary: dashboard.summary, priorities: dashboard.priorities.slice(0, 10), marketSignals: dashboard.signals.slice(0, 10), source: dashboard.source };
+    const generated = await this.groq.executiveReport(facts);
+    const report = await this.reports.create({ type: "executive", title: `Executive revenue report — ${new Date().toLocaleDateString("en-US")}`, body: generated.body, generatedBy: generated.generatedBy, metrics: facts, status: "draft" });
+    await this.audits.create({ action: "generate_executive_report", actor, after: { reportId: String(report._id) }, source: "Groq grounded in Wheelhouse live data", verified: true });
+    return report.toObject();
+  }
+
+  async ask(question: string) {
+    const dashboard = await this.dashboard();
+    const context = { summary: dashboard.summary, priorities: dashboard.priorities.slice(0, 12), signals: dashboard.signals.slice(0, 12), lastScan: this.lastScan, source: dashboard.source };
+    return this.groq.answer(question, context);
+  }
+
+  async sendDailyBriefing() {
+    const dashboard = await this.dashboard();
+    return this.telegram.broadcastBriefing(dashboard.summary);
+  }
 
   async sendBrief(id: string, userId: string) {
     const brief = await this.briefs.findById(id).lean();

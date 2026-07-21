@@ -7,10 +7,11 @@ import { ScannerService } from "./scanner.service";
 import { AuditLog, AuditLogSchema } from "./schemas/audit-log.schema";
 import { Incident, IncidentSchema } from "./schemas/incident.schema";
 import { OwnerBrief, OwnerBriefSchema } from "./schemas/owner-brief.schema";
+import { Report, ReportSchema } from "./schemas/report.schema";
 import { Snapshot, SnapshotSchema } from "./schemas/snapshot.schema";
 
 @Module({
-  imports: [AuthModule, MongooseModule.forFeature([{ name: AuditLog.name, schema: AuditLogSchema }, { name: Incident.name, schema: IncidentSchema }, { name: OwnerBrief.name, schema: OwnerBriefSchema }, { name: Snapshot.name, schema: SnapshotSchema }])],
+  imports: [AuthModule, MongooseModule.forFeature([{ name: AuditLog.name, schema: AuditLogSchema }, { name: Incident.name, schema: IncidentSchema }, { name: OwnerBrief.name, schema: OwnerBriefSchema }, { name: Report.name, schema: ReportSchema }, { name: Snapshot.name, schema: SnapshotSchema }])],
   controllers: [RevenueController],
   providers: [RevenueService, ScannerService],
 })

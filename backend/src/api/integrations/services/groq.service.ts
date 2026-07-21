@@ -19,6 +19,18 @@ export class GroqService {
   get configured() { return Boolean(this.key); }
 
   async ownerBrief(input: { owner?: string; listing: string; cause: string; impact: number; action: string }) {
+    return this.complete("Write a concise owner update using only supplied facts. Do not invent numbers, claims, or actions.", JSON.stringify(input));
+  }
+
+  async executiveReport(input: unknown) {
+    return this.complete("Write a concise executive revenue report from only the supplied JSON. Clearly label estimates, call out priorities, and never invent metrics.", JSON.stringify(input));
+  }
+
+  async answer(question: string, context: unknown) {
+    return this.complete("You are Kivora, a revenue operations assistant. Answer only from the supplied live-data context. Distinguish measured values from estimates. If the context cannot answer, say so.", JSON.stringify({ question, context }));
+  }
+
+  private async complete(system: string, content: string) {
     if (!this.key) throw new ServiceUnavailableException("Groq is not configured");
     try {
       const response = await firstValueFrom(this.http.post<GroqResponse>(
@@ -27,15 +39,15 @@ export class GroqService {
           model: this.model,
           temperature: 0.2,
           messages: [
-            { role: "system", content: "Write a concise owner update using only supplied facts. Do not invent numbers, claims, or actions." },
-            { role: "user", content: JSON.stringify(input) },
+            { role: "system", content: system },
+            { role: "user", content },
           ],
         },
         { headers: { Authorization: `Bearer ${this.key}`, "Content-Type": "application/json" } },
       ));
       const body = response.data.choices?.[0]?.message?.content?.trim();
       if (!body) throw new ServiceUnavailableException("Groq returned an empty response");
-      return { body, generatedBy: this.model };
+      return { body, generatedBy: this.model, grounded: true };
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
       const status = (error as AxiosError).response?.status;

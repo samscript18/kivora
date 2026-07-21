@@ -142,5 +142,11 @@ export class TelegramService {
     return this.sendToChat(chatId, `Good morning.\n\nPortfolio health: ${summary.health}/100\nRevenue: $${summary.revenue.toLocaleString()}\nRevenue at risk: $${summary.atRisk.toLocaleString()}\nOpportunities: ${summary.opportunities}`);
   }
 
+  async broadcastBriefing(summary: { health: number; revenue: number; atRisk: number; opportunities: number }) {
+    const recipients = await this.connections.find({ enabled: true }).select("chatId").lean();
+    const results = await Promise.allSettled(recipients.map((recipient) => this.dailyBriefing(recipient.chatId, summary)));
+    return { recipients: recipients.length, delivered: results.filter((result) => result.status === "fulfilled").length };
+  }
+
   capabilities() { return { botConfigured: this.configured, mode: this.configured ? "live" : "disabled", routing: "per-user" }; }
 }

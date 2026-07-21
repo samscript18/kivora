@@ -10,7 +10,7 @@ export interface WheelhouseListing {
   location?: { address?: string; country?: string; latitude?: number; longitude?: number };
 }
 export interface PriceRecommendation { stay_date: string; price: number; currency?: string; custom_type?: string | null; attr_local_demand?: number; attr_occupancy_pacing?: number; }
-export interface RecommendationResponse { data: PriceRecommendation[]; base_price?: number; base_price_recommended?: number; automatic_rate_posting_enabled?: boolean; }
+export interface RecommendationResponse { data: PriceRecommendation[]; base_price?: number; base_price_recommended?: number; base_price_conservative?: number; base_price_aggressive?: number; automatic_rate_posting_enabled?: boolean; }
 export type Preferences = Record<string, unknown> & { base_price?: number | null; base_price_adjustment?: number | null; automatic_rate_posting_enabled?: boolean };
 
 @Injectable()
@@ -18,6 +18,7 @@ export class WheelhouseService {
   private readonly base: string;
   private readonly key?: string;
   private verified=false;
+  private writeVerified=false;
   private lastError?:number;
   constructor(private readonly http: HttpService, config: ConfigService) {
     this.base = config.get("WHEELHOUSE_BASE_URL", "https://api.usewheelhouse.com/ss_api/v1");
@@ -31,7 +32,7 @@ export class WheelhouseService {
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
         const response = await firstValueFrom(this.http.request<T>({ method, url: `${this.base}${path}`, data, headers: { "X-Integration-Api-Key": this.key } }));
-        this.verified=true;this.lastError=undefined;return response.data;
+        this.verified=true;if(method === "PUT")this.writeVerified=true;this.lastError=undefined;return response.data;
       } catch (error) {
         lastError = error as AxiosError;
         const status = lastError.response?.status;
@@ -59,10 +60,19 @@ export class WheelhouseService {
   neighborhoodPricing(id: string, channel: string) { return this.request<{data:Array<{stay_date:string;median_price:number;low_price:number;high_price:number;listings_count:number}>;currency:string}>("GET", `/listings/${encodeURIComponent(id)}/neighborhood/pricing?channel=${encodeURIComponent(channel)}`); }
   neighborhoodOccupancy(id: string, channel: string) { return this.request<{data:Array<{stay_date:string;occupancy:number;adjusted_occupancy:number;expected_bookings:number;observed_bookings:number}>}>("GET", `/listings/${encodeURIComponent(id)}/neighborhood/occupancy?channel=${encodeURIComponent(channel)}`); }
   changelog(id: string, channel: string) { return this.request<unknown[]>("GET", `/preferences/${encodeURIComponent(id)}/changelog?channel=${encodeURIComponent(channel)}`); }
+  recentChanges(id: string, channel: string) { return this.request<{settings?:string;rates?:string}>("GET", `/listings/${encodeURIComponent(id)}/recent_changes?channel=${encodeURIComponent(channel)}`); }
+  reservations(id: string, channel: string, startDate: string, endDate: string) { return this.request<unknown[]>("GET", `/listings/${encodeURIComponent(id)}/reservations?channel=${encodeURIComponent(channel)}&start_date=${startDate}&end_date=${endDate}`); }
+  monthlyKpis(id: string, channel: string) { return this.request<unknown>("GET", `/listings/${encodeURIComponent(id)}/kpis/monthly?channel=${encodeURIComponent(channel)}`); }
+  flags(id: string, channel: string) { return this.request<unknown[]>("GET", `/listings/${encodeURIComponent(id)}/flags?channel=${encodeURIComponent(channel)}`); }
+  notifications() { return this.request<unknown[]>("GET", "/notifications"); }
+  segments() { return this.request<unknown[]>("GET", "/segments"); }
+  segmentListings(id: number) { return this.request<unknown[]>("GET", `/segments/${id}/listings`); }
+  segmentMetrics(id: number) { return this.request<unknown>("GET", `/segments/${id}/aggregated_metrics`); }
   preview(id: string, channel: string, preferences: Preferences) { return this.request<RecommendationResponse>("POST", `/preferences/${encodeURIComponent(id)}/preview?channel=${encodeURIComponent(channel)}`, preferences); }
   updatePreferences(id: string, channel: string, preferences: Preferences) { return this.request<unknown>("PUT", `/preferences/${encodeURIComponent(id)}?channel=${encodeURIComponent(channel)}`, preferences); }
+  updateSetting(id: string, channel: string, setting: string, value: { type?: "CON" | "REC" | "AGG"; enabled?: boolean }) { return this.request<void>("PUT", `/preferences/${encodeURIComponent(id)}/${encodeURIComponent(setting)}?channel=${encodeURIComponent(channel)}`, value); }
   enableAutomaticPosting(id: string, channel: string) { return this.request<void>("PUT", `/preferences/${encodeURIComponent(id)}/automatic_rate_posting?channel=${encodeURIComponent(channel)}`, { enabled: true }); }
   sync(id: string, channel: string) { return this.request<unknown>("POST", `/listings/${encodeURIComponent(id)}/sync?channel=${encodeURIComponent(channel)}`); }
   marketTimeSeries(marketId: number) { return this.request<unknown>("GET", `/market_report/${marketId}/time_series`); }
-  capabilities() { return { configured:this.configured,connected:this.verified,status:!this.configured?"not_configured":this.verified?"verified":"unverified_or_error",lastError:this.lastError??null,mode:this.verified?"live":"disabled",writeActions:this.verified }; }
+  capabilities() { return { configured:this.configured,connected:this.verified,status:!this.configured?"not_configured":this.verified?"verified":"unverified_or_error",lastError:this.lastError??null,mode:this.verified?"live":"disabled",writeActions:this.writeVerified,writeAccess:this.writeVerified?"verified":"not_yet_verified" }; }
 }

@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from "class-validator";
+import { IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from "class-validator";
 
 export class UnderwriteDto {
   @IsString() @IsNotEmpty() address!: string;
@@ -8,3 +8,5 @@ export class UnderwriteDto {
 }
 
 export class ResolveDto { @IsOptional() @IsString() approvedBy?: string; }
+export class StrategyDto { @IsIn(["conservative", "balanced", "aggressive"]) strategy!: "conservative" | "balanced" | "aggressive"; }
+export class AskDto { @IsString() @IsNotEmpty() @MaxLength(500) question!: string; }
