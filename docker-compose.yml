@@ -1,0 +1,21 @@
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    volumes: ["kivora_mongo:/data/db"]
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      HOST: 0.0.0.0
+      MONGODB_URI: mongodb://mongo:27017/kivora
+    ports: ["4000:4000"]
+    depends_on: [mongo]
+  frontend:
+    build: ./frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api
+    ports: ["3000:3000"]
+    depends_on: [backend]
+volumes:
+  kivora_mongo:

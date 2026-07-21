@@ -1,0 +1,40 @@
+# dependencies and package managers
+**/node_modules/
+**/.pnp
+**/.pnp.*
+**/.yarn/cache/
+**/.yarn/unplugged/
+
+# builds and generated output
+**/.next/
+**/dist/
+**/out/
+**/build/
+**/coverage/
+**/*.tsbuildinfo
+**/next-env.d.ts
+
+# local configuration and secrets
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+**/*.key
+**/*.crt
+
+# logs, runtime, and uploads
+**/*.log
+**/logs/
+**/uploads/
+**/.cache/
+**/.tmp/
+**/tmp/
+*.pid
+
+# editor, OS, and deployment metadata
+.DS_Store
+Thumbs.db
+**/.idea/
+**/.vscode/
+**/.vercel/
+**/.swc/
