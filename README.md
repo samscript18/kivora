@@ -32,20 +32,25 @@ The browser only receives:
 - `NEXT_PUBLIC_API_URL`
 - `NEXT_PUBLIC_PRIVY_APP_ID`
 
-The NestJS application owns every secret: `MONGODB_URI`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `WHEELHOUSE_API_KEY`, `GROQ_API_KEY`, and `KIVORA_APPROVAL_TOKEN`. The official Privy Node client verifies access tokens using the app ID and app secret; no additional verification credential is needed.
+The NestJS application owns every secret: `MONGODB_URI`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY`, `GROQ_API_KEY`, and `KIVORA_APPROVAL_TOKEN`. Wheelhouse credentials are added per organization, validated live, and stored with AES-256-GCM authenticated encryption. `WHEELHOUSE_API_KEY` is supported only as a legacy migration input. The official Privy Node client verifies access tokens using the app ID and app secret.
 
 Ticketmaster, OpenWeather, and Telegram are production integrations but remain disabled until their corresponding administrator credentials are set. Telegram uses one bot with per-user MongoDB connections—there is intentionally no global `TELEGRAM_CHAT_ID`.
 
 ## Live feature coverage
 
 - AI Revenue War Room with portfolio health, revenue at risk, incidents, opportunities, market signals, and ranked actions
-- Rolling Wheelhouse scans with rate-aware batches and deterministic underpricing, overpricing, disabled-pricing, booking-pace, and calendar/sync audits
+- Organization-isolated Wheelhouse accounts, portfolios, listing mappings, scans, records, reports, Telegram links, and actions
+- Persistent full-coverage scan checkpoints and expiring MongoDB distributed locks for multi-instance workers
+- Deterministic underpricing, overpricing, disabled-pricing, booking-pace, calendar/sync, event-demand, and property-aware weather analysis
 - Wheelhouse non-mutating previews plus explicit approval, sync, audit logging, and read-after-write verification for supported fixes
 - Conservative, balanced, and aggressive Wheelhouse strategy previews and approved preset application
 - Ticketmaster event matching and OpenWeather demand-risk signals using listing coordinates
 - Portfolio KPIs, Wheelhouse segments, incident center, opportunity feed, activity center, underwriting, and grounded Groq assistant
-- Executive, portfolio, owner, and revenue reports generated from stored live facts
-- Per-user Telegram linking, alerts, daily briefings, conversational questions, previews, and role-checked approvals
+- Persistent recommendation lifecycles, simulations, idempotent revenue actions, read-after-write verification, and outcome windows
+- Executive, portfolio, owner, and revenue reports generated from stored live facts with authenticated PDF and CSV exports
+- Organization-scoped Telegram linking, deduplicated deliveries, daily briefings, questions, and signed expiring single-use action intents
+
+Production configuration, migrations, health probes, and deployment sequencing are documented in [production operations](docs/PRODUCTION.md).
 
 ## Verification
 
