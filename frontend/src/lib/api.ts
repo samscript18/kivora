@@ -205,6 +205,8 @@ export const updateOrganization = (input: { name?: string; defaultCurrency?: str
 export const setDefaultOrganization = () => unwrap(api.post<Envelope<{ organizationId: string; default: true }>>("/auth/organizations/current/default"));
 export const getOrganizationMembers = () => unwrap(api.get<Envelope<OrganizationMembers>>("/auth/organizations/current/members"));
 export const inviteOrganizationMember = (input: { email: string; role: Exclude<OrganizationRole, "owner"> }) => unwrap(api.post<Envelope<{ id: string; email: string; role: OrganizationRole; token: string; expiresAt: string }>>("/auth/organizations/current/invitations", input));
+export const acceptOrganizationInvitation = (token: string) => unwrap(api.post<Envelope<{ organizationId: string; role: OrganizationRole; status: "active" }>>("/auth/invitations/accept", { token }));
+export const revokeOrganizationInvitation = (id: string) => unwrap(api.delete<Envelope<{ id: string; status: "revoked" }>>(`/auth/organizations/current/invitations/${id}`));
 export const updateOrganizationMember = (id: string, input: { role?: Exclude<OrganizationRole, "owner">; status?: "active" | "suspended" | "removed" }) => unwrap(api.patch<Envelope<unknown>>(`/auth/organizations/current/members/${id}`, input));
 
 export const getWheelhouseConnections = () => unwrap(api.get<Envelope<WheelhouseConnection[]>>("/wheelhouse-connections"));
@@ -224,7 +226,7 @@ export const getMarketIntelligence = () =>
   unwrap(api.get<Envelope<MarketSignal[]>>("/market-intelligence"));
 
 export const refreshMarketIntelligence = () =>
-  unwrap(api.post<Envelope<{ source: string; clusters: number; events: number; weather: number; errors: Array<{ provider: string; location: string; message: string }> }>>("/market-intelligence/refresh"));
+  unwrap(api.post<Envelope<{ source: string; clusters: number; events: number; weather: number; errors: Array<{ provider: string; location: string; message: string }> }>>("/market-intelligence/refresh", undefined, { timeout: 120_000 }));
 
 export const getStrategies = (listingId: string) =>
   unwrap(

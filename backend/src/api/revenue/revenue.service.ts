@@ -296,8 +296,16 @@ export class RevenueService {
       await Promise.allSettled(fresh.slice(0, 10).map((signal) => this.telegram.notifyMarketSignal(signal, actor?.organizationId)));
     }
     if (actor && this.opportunityRecords) {
-      const scope = await this.scope(actor);
-      await this.detectIndependentOpportunities(actor, listings, scope.credential, portfolioId,scope.connectionId);
+      try {
+        const scope = await this.scope(actor);
+        await this.detectIndependentOpportunities(actor, listings, scope.credential, portfolioId,scope.connectionId);
+      } catch (error) {
+        result.errors.push({
+          provider: "Wheelhouse opportunity scan",
+          location: "Connected portfolio",
+          message: this.errorMessage(error),
+        });
+      }
     }
     return result;
   }

@@ -141,7 +141,7 @@ export class AuthService {
       { returnDocument: "after" },
     ).select("+tokenHash").lean();
     if (!invitation) throw new BadRequestException("Invitation is invalid, expired, or already used");
-    if (actor.email && invitation.email !== actor.email.toLowerCase()) {
+    if (!actor.email || invitation.email !== actor.email.toLowerCase()) {
       await this.invitations.updateOne({ _id: invitation._id }, { $set: { status: "pending" }, $unset: { acceptedAt: 1, acceptedBy: 1 } });
       throw new ForbiddenException("Invitation email does not match the signed-in account");
     }

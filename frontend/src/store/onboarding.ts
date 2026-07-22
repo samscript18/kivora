@@ -9,6 +9,7 @@ type OnboardingState = {
   open: () => void;
   close: () => void;
   dismiss: (organizationId: string) => void;
+  resetForSignIn: () => void;
 };
 
 export const useOnboardingStore = create<OnboardingState>()(persist((set) => ({
@@ -17,4 +18,5 @@ export const useOnboardingStore = create<OnboardingState>()(persist((set) => ({
   open: () => set({ manuallyOpen: true }),
   close: () => set({ manuallyOpen: false }),
   dismiss: (organizationId) => set((state) => ({ manuallyOpen: false, dismissedOrganizations: [...new Set([...state.dismissedOrganizations, organizationId])] })),
-}), { name: "kivora-onboarding", storage: createJSONStorage(() => localStorage), partialize: (state) => ({ dismissedOrganizations: state.dismissedOrganizations }) }));
+  resetForSignIn: () => set({ manuallyOpen: false, dismissedOrganizations: [] }),
+}), { name: "kivora-onboarding-session", storage: createJSONStorage(() => sessionStorage), partialize: (state) => ({ dismissedOrganizations: state.dismissedOrganizations }) }));

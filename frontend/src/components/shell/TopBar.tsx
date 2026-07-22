@@ -1,11 +1,12 @@
 "use client";
 import { Bell, LogOut, Menu, Search } from "lucide-react";
 import { usePrivy } from "@privy-io/react-auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDashboard, QUERY_KEYS } from "@/lib/api";
 import { SyncStatus } from "@/components/ui/SyncStatus";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useOnboardingStore } from "@/store/onboarding";
 
 const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   "/dashboard/war-room":     { title: "Revenue War Room",    subtitle: "Today's highest-impact actions" },
@@ -27,7 +28,9 @@ interface TopBarProps {
 
 export function TopBar({ onMenuOpen }: TopBarProps) {
   const pathname = usePathname();
+  const queryClient = useQueryClient();
   const { user, logout } = usePrivy();
+  const resetOnboarding = useOnboardingStore((state) => state.resetForSignIn);
   const { data, dataUpdatedAt } = useQuery({
     queryKey: QUERY_KEYS.dashboard,
     queryFn: getDashboard,
@@ -38,6 +41,14 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
   const lastSynced = dataUpdatedAt ? new Date(dataUpdatedAt).toISOString() : undefined;
   const criticalCount = data?.summary.criticalIncidents ?? 0;
   const initials = (user?.email?.address ?? "U").slice(0, 1).toUpperCase();
+  const handleLogout = async () => {
+    await logout();
+    queryClient.clear();
+    window.localStorage.removeItem("kivora.organizationId");
+    window.sessionStorage.removeItem("kivora-onboarding-session");
+    resetOnboarding();
+    window.location.replace("/");
+  };
 
   return (
     <header className="dashboard-topbar sticky top-3 z-30 mx-3 mt-3 flex min-h-[68px] items-center gap-3 rounded-[22px] border border-white/[0.07] bg-[#0c0c0f]/80 px-3 shadow-[0_20px_70px_rgba(0,0,0,.32)] backdrop-blur-2xl sm:mx-5 sm:px-5">
@@ -98,7 +109,7 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
         </div>
         <button
           type="button"
-          onClick={() => void logout()}
+          onClick={() => void handleLogout()}
           className="inline-flex h-10 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-3 text-[11px] font-semibold text-slate-300 transition hover:border-red-500/25 hover:bg-red-500/[0.06] hover:text-red-300"
           aria-label="Log out of Kivora"
         >

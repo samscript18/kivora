@@ -43,19 +43,28 @@ export class MarketIntelligenceService {
     let weather = 0;
     const errors: Array<{ provider: string; location: string; message: string }> = [];
     const ticket=organizationId?await this.organizationSettings.credential(organizationId,"ticketmaster"):this.ticketmasterKey?{credential:this.ticketmasterKey,config:{settings:{}}}:null;const weatherConfig=organizationId?await this.organizationSettings.credential(organizationId,"openweather"):this.weatherKey?{credential:this.weatherKey,config:{settings:{}}}:null;
-    for (const cluster of clusters) {
+    const clusterResults = await Promise.all(clusters.map(async (cluster) => {
       const tasks: Array<{ provider: string; run: () => Promise<number> }> = [];
       if (ticket) tasks.push({ provider: "Ticketmaster", run: () => this.refreshEvents(cluster, organizationId, portfolioId,ticket.credential,ticket.config.settings||{}) });
       if (weatherConfig) tasks.push({ provider: "OpenWeather", run: () => this.refreshWeather(cluster, organizationId, portfolioId,weatherConfig.credential,weatherConfig.config.settings||{}) });
       const results = await Promise.allSettled(tasks.map((task) => task.run()));
+      let clusterEvents = 0;
+      let clusterWeather = 0;
+      const clusterErrors: Array<{ provider: string; location: string; message: string }> = [];
       results.forEach((result, index) => {
         if (result.status === "fulfilled") {
-          if (tasks[index].provider === "Ticketmaster") events += result.value;
-          else weather += result.value;
+          if (tasks[index].provider === "Ticketmaster") clusterEvents += result.value;
+          else clusterWeather += result.value;
         } else {
-          errors.push({ provider: tasks[index].provider, location: cluster.location, message: result.reason instanceof Error ? result.reason.message : "request failed" });
+          clusterErrors.push({ provider: tasks[index].provider, location: cluster.location, message: result.reason instanceof Error ? result.reason.message : "request failed" });
         }
       });
+      return { events: clusterEvents, weather: clusterWeather, errors: clusterErrors };
+    }));
+    for (const result of clusterResults) {
+      events += result.events;
+      weather += result.weather;
+      errors.push(...result.errors);
     }
     if(organizationId){if(ticket)await this.organizationSettings.record(organizationId,"ticketmaster",errors.find(e=>e.provider==="Ticketmaster")?.message).catch(()=>undefined);if(weatherConfig)await this.organizationSettings.record(organizationId,"openweather",errors.find(e=>e.provider==="OpenWeather")?.message).catch(()=>undefined);}return { source: "live external APIs", clusters: clusters.length, events, weather, errors, capabilities: this.capabilities() };
   }
