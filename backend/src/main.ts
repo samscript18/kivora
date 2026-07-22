@@ -32,7 +32,8 @@ async function bootstrap() {
   const document = new DocumentBuilder().setTitle("Kivora Revenue Intelligence API").setDescription("Approval-gated live Wheelhouse revenue operations").setVersion("1.0").addBearerAuth().addApiKey({ type: "apiKey", name: "x-kivora-approval-token", in: "header" }, "approval-token").build();
   SwaggerModule.setup("api/docs", app, SwaggerModule.createDocument(app, document));
   const port = config.get<number>("PORT", 4000);
-  await app.listen(port, config.get<string>("HOST", "0.0.0.0"));
-  logger.log(`Kivora API listening on ${port}`);
+  const host = "0.0.0.0";
+  await app.listen(port, host);
+  logger.log(`Kivora API listening on ${host}:${port}`);
 }
 void bootstrap();
