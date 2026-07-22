@@ -1,5 +1,5 @@
 "use client";
-import { Bell, Menu, Search } from "lucide-react";
+import { Bell, LogOut, Menu, Search } from "lucide-react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboard, QUERY_KEYS } from "@/lib/api";
@@ -92,17 +92,18 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
           )}
         </a>
 
-        {/* User avatar */}
-        <div className="relative">
-          <button
-            onClick={logout}
-            title="Sign out"
-            className="grid h-9 w-9 place-items-center rounded-xl bg-accent/10 font-mono text-xs font-bold text-accent hover:bg-accent/20 transition-colors"
-            aria-label="Sign out"
-          >
-            {initials}
-          </button>
+        <div className="hidden h-9 w-9 place-items-center rounded-xl bg-accent/10 font-mono text-xs font-bold text-accent sm:grid" aria-hidden="true">
+          {initials}
         </div>
+        <button
+          type="button"
+          onClick={() => void logout()}
+          className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white/[0.02] px-3 text-[11px] font-semibold text-slate-300 transition-colors hover:border-red-500/25 hover:bg-red-500/[0.06] hover:text-red-300"
+          aria-label="Log out of Kivora"
+        >
+          <LogOut size={14} />
+          <span>Log out</span>
+        </button>
       </div>
     </header>
   );
