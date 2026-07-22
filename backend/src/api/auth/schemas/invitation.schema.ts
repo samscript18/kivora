@@ -14,6 +14,10 @@ export class Invitation {
   @Prop() acceptedAt?: Date;
   @Prop({ type: Types.ObjectId }) acceptedBy?: Types.ObjectId;
   @Prop() revokedAt?: Date;
+  @Prop() sentAt?: Date;
+  @Prop() deliveryProvider?: string;
+  @Prop() providerMessageId?: string;
+  @Prop() deliveryError?: string;
 }
 
 export type InvitationDocument = HydratedDocument<Invitation>;

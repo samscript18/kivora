@@ -207,9 +207,10 @@ export class RevenueService {
     const revenue = snapshots.reduce((sum, item) => sum + (item.revenue || 0), 0);
     const occupancy = snapshots.length ? snapshots.reduce((sum, item) => sum + (item.occupancy || 0), 0) / snapshots.length : 0;
     const health = snapshots.length ? Math.round(snapshots.reduce((sum, item) => sum + (item.health || 0), 0) / snapshots.length) : 0;
+    const listingNames = new Map(listings.map((listing) => [listing.id, listing.nickname || listing.title || "Connected property"]));
     const opportunityFilter = actor ? { organizationId: new Types.ObjectId(actor.organizationId), status: { $in: ["open", "under_review", "approved", "ignored"] }, expiresAt: { $gt: new Date() } } : null;
     const opportunities = actor && this.opportunityRecords
-      ? await this.opportunityRecords.find(opportunityFilter!).sort({ projectedRevenueGain: -1 }).limit(50).lean().then((rows) => rows.map((row: any) => this.serializeOpportunity(row)))
+      ? await this.opportunityRecords.find(opportunityFilter!).sort({ projectedRevenueGain: -1 }).limit(50).lean().then((rows) => rows.map((row: any) => this.serializeOpportunity(row, listingNames)))
       : this.toOpportunities(incidents);
     const opportunityTotals = actor && this.opportunityRecords
       ? (await this.opportunityRecords.aggregate([{ $match: opportunityFilter! }, { $group: { _id: null, count: { $sum: 1 }, impact: { $sum: "$projectedRevenueGain" } } }]))[0] || { count: 0, impact: 0 }
@@ -267,7 +268,8 @@ export class RevenueService {
   async getOpportunities(actor?: AuthenticatedUser) {
     if (actor && this.opportunityRecords) {
       const rows = await this.opportunityRecords.find({ organizationId: new Types.ObjectId(actor.organizationId), status: { $ne: "expired" }, expiresAt: { $gt: new Date() } }).sort({ projectedRevenueGain: -1, confidence: -1 }).limit(200).lean();
-      return rows.map((row: any) => this.serializeOpportunity(row));
+      const names = await this.opportunityListingNames(rows, actor);
+      return rows.map((row: any) => this.serializeOpportunity(row, names));
     }
     return this.toOpportunities(await this.getIncidents(actor));
   }
@@ -859,7 +861,8 @@ export class RevenueService {
     );
   }
   private serializeAction(action: any) { return { ...action, id: String(action._id), organizationId: String(action.organizationId), connectionId: String(action.connectionId) }; }
-  private serializeOpportunity(row: any) { return { id: String(row._id), property: row.listingId || `${row.listingIds?.length || 0} listings`, listingId: row.listingId, action: row.suggested?.action || row.type, impact: row.projectedRevenueGain, confidence: row.confidence, tag: row.riskLevel, status: row.status, category: row.type, discoveredAt: row.createdAt, expiresAt: row.expiresAt, currentState: JSON.stringify(row.baseline), proposedState: JSON.stringify(row.suggested), evidence: row.evidence, affectedListings: row.listingIds?.length || (row.listingId ? 1 : 0) }; }
+  private serializeOpportunity(row: any, listingNames = new Map<string, string>()) { const ids: string[] = row.listingIds?.length ? row.listingIds : row.listingId ? [row.listingId] : []; const resolved = ids.map((id) => listingNames.get(id)).filter((name): name is string => Boolean(name)); const property = resolved.length === 1 ? resolved[0] : resolved.length > 1 ? `${resolved[0]} + ${resolved.length - 1} more` : ids.length > 1 ? `${ids.length} connected properties` : "Connected property"; return { id: String(row._id), property, listingId: row.listingId, action: row.suggested?.action || row.type, impact: row.projectedRevenueGain, confidence: row.confidence, tag: row.riskLevel, status: row.status, category: row.type, discoveredAt: row.createdAt, expiresAt: row.expiresAt, currentState: JSON.stringify(row.baseline), proposedState: JSON.stringify(row.suggested), evidence: row.evidence, affectedListings: row.listingIds?.length || (row.listingId ? 1 : 0) }; }
+  private async opportunityListingNames(rows: any[], actor: AuthenticatedUser) { const live = new Map(this.listingsFor(actor).map((listing) => [listing.id, listing.nickname || listing.title || ""])); if (!this.connection.db) return live; const ids = [...new Set(rows.flatMap((row) => row.listingIds?.length ? row.listingIds : row.listingId ? [row.listingId] : []).filter(Boolean))]; if (!ids.length) return live; const mappings = await this.connection.db.collection("listingmappings").find({ organizationId: new Types.ObjectId(actor.organizationId), externalListingId: { $in: ids }, active: true }).project({ externalListingId: 1, name: 1 }).toArray(); for (const mapping of mappings) if (mapping.name && !live.get(mapping.externalListingId)) live.set(mapping.externalListingId, mapping.name); return live; }
   private priorityScore(item: any) { const impact = Math.min(50, Math.max(0, Number(item.impact || 0) / 200)); const confidence = Math.max(0, Math.min(100, Number(item.confidence || 0))) * 0.25; const severity = item.severity === "Critical" ? 20 : item.severity === "Warning" ? 10 : 0; const urgency = item.expiresAt ? Math.max(0, 15 - (new Date(item.expiresAt).getTime() - Date.now()) / 86_400_000) : 5; return Number((impact + confidence + severity + urgency).toFixed(2)); }
   private signalType(cause: string) { return cause.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""); }
   private async persistHealthScore(actor: AuthenticatedUser, portfolioId?: string) {

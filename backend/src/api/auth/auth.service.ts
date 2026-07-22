@@ -7,6 +7,7 @@ import { Organization } from "./schemas/organization.schema";
 import { User } from "./schemas/user.schema";
 import { Invitation } from "./schemas/invitation.schema";
 import { AuthenticatedUser } from "./guards/privy-auth.guard";
+import { InvitationEmailService } from "./services/invitation-email.service";
 
 @Injectable()
 export class AuthService {
@@ -15,6 +16,7 @@ export class AuthService {
     @InjectModel(Organization.name) private readonly organizations: Model<Organization>,
     @InjectModel(Membership.name) private readonly memberships: Model<Membership>,
     @InjectModel(Invitation.name) private readonly invitations: Model<Invitation>,
+    private readonly invitationEmail: InvitationEmailService,
   ) {}
 
   async sync(privyUserId: string, profile?: { email?: string; name?: string }) {
@@ -120,11 +122,18 @@ export class AuthService {
     const existingUser = await this.users.findOne({ email }).lean();
     if (existingUser && await this.memberships.exists({ organizationId, userId: existingUser._id, status: { $ne: "removed" } })) throw new ConflictException("This user is already a member");
     await this.invitations.updateMany({ organizationId, email, status: "pending" }, { $set: { status: "revoked", revokedAt: new Date() } });
+    const organization = await this.organizations.findById(organizationId).select("name").lean();
     const token = randomBytes(32).toString("base64url");
     const invitation = await this.invitations.create({ organizationId, email, role: input.role, tokenHash: this.hash(token), createdBy: this.objectId(actor.sub, "User"), expiresAt: new Date(Date.now() + 7 * 86_400_000) });
-    // The raw token is returned exactly once so the caller can deliver it via an
-    // explicitly configured channel. Only its SHA-256 digest is persisted.
-    return { id: String(invitation._id), email, role: input.role, token, expiresAt: invitation.expiresAt };
+    try {
+      const delivery = await this.invitationEmail.sendInvitation({ invitationId: String(invitation._id), email, organizationName: organization?.name || "your Kivora workspace", inviterName: actor.name || "A Kivora administrator", role: input.role, token, expiresAt: invitation.expiresAt });
+      await this.invitations.updateOne({ _id: invitation._id }, { $set: { sentAt: new Date(), deliveryProvider: delivery.provider, providerMessageId: delivery.messageId }, $unset: { deliveryError: 1 } });
+      return { id: String(invitation._id), email, role: input.role, status: "sent", expiresAt: invitation.expiresAt };
+    } catch (error) {
+      const message = error instanceof Error ? error.message.slice(0, 500) : "Invitation email delivery failed";
+      await this.invitations.updateOne({ _id: invitation._id }, { $set: { status: "revoked", revokedAt: new Date(), deliveryProvider: "resend", deliveryError: message } });
+      throw error;
+    }
   }
 
   async revokeInvitation(actor: AuthenticatedUser, invitationId: string) {

@@ -51,6 +51,21 @@ describe("RevenueService audit rules", () => {
     await expect(service.preview("calendar")).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
+  it("uses the connected property name instead of exposing a listing id", () => {
+    const opportunity = (service as any).serializeOpportunity({
+      _id: "507f1f77bcf86cd799439011",
+      listingId: "64417863",
+      listingIds: ["64417863"],
+      suggested: { action: "Apply balanced pricing preset" },
+      projectedRevenueGain: 293,
+      confidence: 72,
+      riskLevel: "low",
+    }, new Map([["64417863", "Wheelhouse Sample · US"]]));
+
+    expect(opportunity.property).toBe("Wheelhouse Sample · US");
+    expect(opportunity.property).not.toBe("64417863");
+  });
+
   it("gives the assistant an explicit ranked revenue-risk context", async () => {
     (service as any).incidentsCache = [{
       id: "risk-1",

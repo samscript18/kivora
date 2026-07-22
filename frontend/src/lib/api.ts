@@ -204,7 +204,7 @@ export const updateOrganization = (input: { name?: string; defaultCurrency?: str
   unwrap(api.patch<Envelope<OrganizationSummary>>("/auth/organizations/current", input));
 export const setDefaultOrganization = () => unwrap(api.post<Envelope<{ organizationId: string; default: true }>>("/auth/organizations/current/default"));
 export const getOrganizationMembers = () => unwrap(api.get<Envelope<OrganizationMembers>>("/auth/organizations/current/members"));
-export const inviteOrganizationMember = (input: { email: string; role: Exclude<OrganizationRole, "owner"> }) => unwrap(api.post<Envelope<{ id: string; email: string; role: OrganizationRole; token: string; expiresAt: string }>>("/auth/organizations/current/invitations", input));
+export const inviteOrganizationMember = (input: { email: string; role: Exclude<OrganizationRole, "owner"> }) => unwrap(api.post<Envelope<{ id: string; email: string; role: OrganizationRole; status: "sent"; expiresAt: string }>>("/auth/organizations/current/invitations", input));
 export const acceptOrganizationInvitation = (token: string) => unwrap(api.post<Envelope<{ organizationId: string; role: OrganizationRole; status: "active" }>>("/auth/invitations/accept", { token }));
 export const revokeOrganizationInvitation = (id: string) => unwrap(api.delete<Envelope<{ id: string; status: "revoked" }>>(`/auth/organizations/current/invitations/${id}`));
 export const updateOrganizationMember = (id: string, input: { role?: Exclude<OrganizationRole, "owner">; status?: "active" | "suspended" | "removed" }) => unwrap(api.patch<Envelope<unknown>>(`/auth/organizations/current/members/${id}`, input));
