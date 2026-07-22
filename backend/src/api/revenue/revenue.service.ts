@@ -11,6 +11,7 @@ import { AuditLog } from "./schemas/audit-log.schema";
 import { Incident } from "./schemas/incident.schema";
 import { OwnerBrief } from "./schemas/owner-brief.schema";
 import { Report } from "./schemas/report.schema";
+import { AssistantMessage } from "./schemas/assistant-message.schema";
 import { Snapshot } from "./schemas/snapshot.schema";
 import { AuthenticatedUser } from "../auth/guards/privy-auth.guard";
 import { ConnectionService } from "./connection.service";
@@ -75,6 +76,7 @@ export class RevenueService {
     @Optional() @InjectModel(NotificationDelivery.name) private readonly notifications?: Model<NotificationDelivery>,
     @Optional() @InjectModel(PortfolioHealthScore.name) private readonly healthScores?: Model<PortfolioHealthScore>,
     @Optional() private readonly organizationSettings?:OrganizationIntegrationService,
+    @Optional() @InjectModel(AssistantMessage.name) private readonly assistantMessages?: Model<AssistantMessage>,
   ) {}
 
   capabilities() {
@@ -394,13 +396,15 @@ export class RevenueService {
       listing: type === "owner" ? listing : undefined,
     };
     const generated = await this.groq.report(type, facts);
+    const body = this.reportBody(generated.body, type, facts);
     const label = ({ executive: "Executive revenue report", portfolio: "Portfolio performance report", owner: `Owner report — ${listing?.nickname || listing?.title || listingId}`, revenue: "Revenue opportunity summary" })[type];
-    const report = await this.reports.create({ ...this.orgScope(user), type, title: `${label} — ${new Date().toLocaleDateString("en-US")}`, body: generated.body, generatedBy: generated.generatedBy, metrics: facts, status: "draft", currency: listing?.currency || "USD", timezone: "UTC", version: 1 });
+    const report = await this.reports.create({ ...this.orgScope(user), type, title: `${label} — ${new Date().toLocaleDateString("en-US")}`, body, generatedBy: generated.generatedBy, metrics: facts, status: "draft", currency: listing?.currency || "USD", timezone: "UTC", version: 1 });
     await this.audits.create({ ...this.orgScope(user), ...(user ? { actorUserId: new Types.ObjectId(user.sub) } : {}), action: `generate_${type}_report`, actor: actorName, entityType: "report", entityId: String(report._id), after: { reportId: String(report._id), listingId }, source: "Groq grounded in Wheelhouse live data", verified: true });
     return report.toObject();
   }
 
-  async ask(question: string, actor?: AuthenticatedUser) {
+  async ask(question: string, actor?: AuthenticatedUser, channel: "web" | "telegram" = "web") {
+    const history = actor && this.assistantMessages ? await this.assistantMessages.find({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub) }).sort({ createdAt: -1 }).limit(12).lean() : [];
     const dashboard = await this.dashboard(actor);
     const rankedIncidents = [...this.incidentsFor(actor)].sort((a, b) => b.revenueAtRisk - a.revenueAtRisk);
     const largest = rankedIncidents[0];
@@ -432,8 +436,24 @@ export class RevenueService {
         affectedListings: signal.affectedListings,
         measuredRevenueImpact: null,
       })),
+      conversationHistory: history.reverse().map((message) => ({ role: message.role, text: message.text })),
     };
-    return this.groq.answer(question, context);
+    if (actor && this.assistantMessages) await this.assistantMessages.create({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub), role: "user", text: question.trim(), channel, grounded: true });
+    const answer = await this.groq.answer(question, context);
+    if (actor && this.assistantMessages) await this.assistantMessages.create({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub), role: "assistant", text: answer.body, channel, generatedBy: answer.generatedBy, grounded: answer.grounded });
+    return answer;
+  }
+
+  async assistantHistory(actor: AuthenticatedUser) {
+    if (!this.assistantMessages) return [];
+    const rows = await this.assistantMessages.find({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub) }).sort({ createdAt: -1 }).limit(100).lean();
+    return rows.reverse().map((message: any) => ({ id: String(message._id), role: message.role, text: message.text, createdAt: message.createdAt, grounded: message.grounded }));
+  }
+
+  async clearAssistantHistory(actor: AuthenticatedUser) {
+    if (!this.assistantMessages) return { cleared: 0 };
+    const result = await this.assistantMessages.deleteMany({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub) });
+    return { cleared: result.deletedCount };
   }
 
   async sendDailyBriefing(actor?: AuthenticatedUser) {
@@ -620,6 +640,10 @@ export class RevenueService {
       this.collaboration ? this.collaboration.find({ organizationId, entityType: kind, entityId: String(entity._id) }).sort({ createdAt: 1 }).lean() : [],
       this.signalRecords ? this.signalRecords.find({ organizationId, listingIds: { $in: entity.listingIds?.length ? entity.listingIds : [entity.listingId] }, validUntil: { $gt: new Date() } }).sort({ detectedAt: -1 }).limit(20).lean() : [],
     ]);
+    const evidence = entity.evidence || {};
+    entity.explanation = entity.explanation || entity.rootCause || evidence.explanation || entity.detectionSource || entity.cause || entity.title || "Kivora detected a material change that needs review.";
+    entity.affectedDates = entity.affectedDates?.length ? entity.affectedDates : evidence.affectedDates || [];
+    entity.impactCalculation = entity.impactCalculation || evidence.impactCalculation;
     const scope=await this.scope(actor).catch(()=>({credential:undefined,connectionId:undefined,portfolioId:undefined}));const latestSimulation:any=simulations[0];const canApprove=["owner","administrator","revenue_manager"].includes(actor.organizationRole)&&recommendation&&new Date(recommendation.expiresAt)>new Date();return { kind, entity: this.serializeDocument(entity), recommendation: recommendation ? this.serializeDocument(recommendation) : null, simulations: simulations.map((item: any) => this.serializeDocument(item)), actions: actions.map((item: any) => this.serializeDocument(item)), outcomes: outcomes.map((item: any) => this.serializeDocument(item)), activity, comments, signals,capabilities:{canApprove:Boolean(canApprove),canExecute:Boolean(canApprove&&latestSimulation&&new Date(latestSimulation.expiresAt)>new Date()&&recommendation.proposedAction!=="manual_review"&&this.wheelhouse.capabilities(scope.credential).writeActions),simulationFresh:Boolean(latestSimulation&&new Date(latestSimulation.expiresAt)>new Date()),recommendationFresh:Boolean(recommendation&&new Date(recommendation.expiresAt)>new Date()),writeAccess:this.wheelhouse.capabilities(scope.credential).writeAccess} };
   }
 
@@ -733,7 +757,7 @@ export class RevenueService {
     const report: any = await this.reports.findOne({ _id: new Types.ObjectId(id), organizationId: new Types.ObjectId(actor.organizationId) }).lean();
     if (!report) throw new NotFoundException("Report not found");
     const safeName = String(report.title || "kivora-report").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
-    const buffer = format === "pdf" ? this.createPdf(report.title, report.body) : this.createCsv(report.metrics);
+    const buffer = format === "pdf" ? this.createPdf(report) : this.createCsv(report);
     await this.audits.create({ organizationId: new Types.ObjectId(actor.organizationId), actorUserId: new Types.ObjectId(actor.sub), actor: actor.name, action: "report_downloaded", entityType: "report", entityId: id, after: { format, bytes: buffer.length }, source: "Kivora", verified: true });
     return { buffer, filename: `${safeName || "kivora-report"}.${format}`, contentType: format === "pdf" ? "application/pdf" : "text/csv; charset=utf-8" };
   }
@@ -1019,41 +1043,91 @@ export class RevenueService {
     await this.telegram.notifyRecommendation(recommendation,"opportunity",String((opportunity as any).type||"")).catch(()=>undefined);
     this.metrics?.increment("opportunities_created_total", { type: opportunity.type });
   }
-  private createCsv(metrics: Record<string, unknown>) {
-    const rows: Array<[string, string]> = [];
-    const walk = (value: unknown, path: string) => {
-      if (value === null || typeof value !== "object") rows.push([path, value == null ? "" : String(value)]);
-      else if (Array.isArray(value)) value.forEach((child, index) => walk(child, `${path}[${index}]`));
-      else Object.entries(value as Record<string, unknown>).forEach(([key, child]) => walk(child, path ? `${path}.${key}` : key));
-    };
-    walk(metrics, "");
-    const quote = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    return Buffer.from(["field,value", ...rows.map(([field, value]) => `${quote(field)},${quote(value)}`)].join("\n"), "utf8");
+  private reportBody(generated: string, type: string, facts: any) {
+    const cleaned = String(generated || "").trim();
+    if (cleaned.replace(/[*_#`\s-]/g, "").length >= 40) return cleaned;
+    const summary = facts.summary || {};
+    const priorities = (facts.priorities || []).slice(0, 5);
+    const signals = (facts.marketSignals || []).slice(0, 5);
+    return [
+      `# ${type[0].toUpperCase()}${type.slice(1)} revenue report`,
+      "## Portfolio summary",
+      `- Portfolio health: ${summary.health ?? summary.healthScore ?? "Unavailable"}`,
+      `- Revenue at risk: ${summary.atRisk ?? 0}`,
+      `- Open opportunities: ${summary.opportunities ?? 0}`,
+      `- Critical incidents: ${summary.criticalIncidents ?? 0}`,
+      "## Highest-impact actions",
+      ...(priorities.length ? priorities.map((item: any) => `- ${item.title || item.action || item.property}: ${item.impact ?? item.revenueAtRisk ?? 0} measured or projected impact`) : ["- No active priority met the current evidence threshold."]),
+      "## Market intelligence",
+      ...(signals.length ? signals.map((item: any) => `- ${item.title} — ${item.location || "portfolio location"} (${item.confidence ?? 0}% confidence)`) : ["- No active event or weather signal is stored for this reporting period."]),
+      "## Recommended next step",
+      priorities[0] ? `Review ${priorities[0].title || priorities[0].action || "the highest-impact action"} and its supporting evidence before approval.` : "Continue monitoring the live portfolio for material changes.",
+    ].join("\n");
   }
-  private createPdf(title: string, body: string) {
-    const wrap = (text: string) => text.replace(/[^\x20-\x7E\n]/g, "?").split(/\r?\n/).flatMap((paragraph) => paragraph.match(/.{1,88}(?:\s+|$)|.{1,88}/g) || [""]);
-    const lines = [title, "", ...wrap(body)];
-    const pages = Array.from({ length: Math.max(1, Math.ceil(lines.length / 48)) }, (_, index) => lines.slice(index * 48, index * 48 + 48));
-    const objectCount = 4 + pages.length * 2;
-    const objects = new Map<number, string>();
+
+  private createCsv(report: any) {
+    if (!report?.metrics && !report?.title && !report?.body) {
+      const legacyRows: Array<[string, string]> = [];
+      const flatten = (value: unknown, path: string) => { if (value === null || typeof value !== "object") legacyRows.push([path, value == null ? "" : String(value)]); else if (Array.isArray(value)) value.forEach((child, index) => flatten(child, `${path}[${index}]`)); else Object.entries(value as Record<string, unknown>).forEach(([key, child]) => flatten(child, path ? `${path}.${key}` : key)); };
+      flatten(report || {}, ""); const quoteLegacy = (value: string) => `"${value.replace(/"/g, '""')}"`;
+      return Buffer.from(["field,value", ...legacyRows.map(([field, value]) => `${quoteLegacy(field)},${quoteLegacy(value)}`)].join("\n"), "utf8");
+    }
+    const rows: string[][] = [
+      ["Kivora Revenue Operations Report", "", ""],
+      ["Report", "Title", String(report.title || "")],
+      ["Report", "Type", String(report.type || "")],
+      ["Report", "Status", String(report.status || "")],
+      ["Report", "Generated", new Date(report.createdAt || Date.now()).toISOString()],
+      ["Report", "Currency", String(report.currency || "USD")],
+      ["Report", "Timezone", String(report.timezone || "UTC")],
+      ["", "", ""],
+      ["Narrative", "Section", "Content"],
+    ];
+    let section = "Overview";
+    for (const raw of String(report.body || "").split(/\r?\n/)) {
+      const line = raw.trim(); if (!line) continue;
+      if (/^#{1,3}\s+/.test(line)) { section = line.replace(/^#{1,3}\s+/, "").replace(/\*\*/g, ""); continue; }
+      rows.push(["Narrative", section, line.replace(/^[-*]\s+/, "").replace(/\*\*/g, "")]);
+    }
+    rows.push(["", "", ""], ["Live data", "Metric", "Value"]);
+    const walk = (value: unknown, path: string) => {
+      if (value === null || typeof value !== "object") rows.push(["Live data", path || "value", value == null ? "" : String(value)]);
+      else if (Array.isArray(value)) value.forEach((child, index) => walk(child, `${path || "items"} ${index + 1}`));
+      else Object.entries(value as Record<string, unknown>).forEach(([key, child]) => walk(child, path ? `${path} / ${key}` : key));
+    };
+    walk(report.metrics || {}, "");
+    const quote = (value: string) => { const safe = /^[=+\-@]/.test(value) ? `'${value}` : value; return `"${safe.replace(/"/g, '""')}"`; };
+    return Buffer.from(`\uFEFF${rows.map((row) => row.map((cell) => quote(cell)).join(",")).join("\r\n")}`, "utf8");
+  }
+
+  private createPdf(report: any) {
+    type PdfLine = { text: string; style: "heading" | "body" | "bullet" };
+    const ascii = (value: string) => value.normalize("NFKD").replace(/[^\x20-\x7E]/g, "").replace(/\*\*/g, "").trimEnd();
+    const wrap = (text: string, width = 88) => { const words = ascii(text).split(/\s+/).filter(Boolean); const lines: string[] = []; let line = ""; for (const word of words) { if (`${line} ${word}`.trim().length > width && line) { lines.push(line); line = word; } else line = `${line} ${word}`.trim(); } return lines.length || line ? [...lines, ...(line ? [line] : [])] : [""]; };
+    const content: PdfLine[] = [];
+    for (const raw of String(report.body || "").split(/\r?\n/)) {
+      const line = raw.trim(); if (!line) { content.push({ text: "", style: "body" }); continue; }
+      const heading = /^#{1,3}\s+/.test(line); const bullet = /^[-*]\s+/.test(line);
+      const text = line.replace(/^#{1,3}\s+/, "").replace(/^[-*]\s+/, "");
+      wrap(text, heading ? 68 : bullet ? 82 : 88).forEach((part, index) => content.push({ text: `${bullet && index === 0 ? "- " : bullet ? "  " : ""}${part}`, style: heading ? "heading" : bullet ? "bullet" : "body" }));
+    }
+    const pages: PdfLine[][] = []; for (let index = 0; index < content.length; index += 32) pages.push(content.slice(index, index + 32)); if (!pages.length) pages.push([]);
+    const objectCount = 5 + pages.length * 2; const objects = new Map<number, string>();
     objects.set(1, "<< /Type /Catalog /Pages 2 0 R >>");
-    const pageIds = pages.map((_, index) => 5 + index * 2);
+    const pageIds = pages.map((_, index) => 6 + index * 2);
     objects.set(2, `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`);
     objects.set(3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
-    objects.set(4, "<< /Producer (Kivora Revenue Operations) >>");
+    objects.set(4, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
+    objects.set(5, `<< /Producer (Kivora Revenue Operations) /Title (${ascii(String(report.title || "Kivora report")).replace(/[()]/g, "")}) >>`);
     const escape = (value: string) => value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
     pages.forEach((page, index) => {
-      const pageId = pageIds[index]; const contentId = pageId + 1;
-      const commands = ["BT", "/F1 10 Tf", "50 750 Td", "14 TL", ...page.map((line, lineIndex) => `${lineIndex ? "T* " : ""}(${escape(line)}) Tj`), "ET"].join("\n");
-      objects.set(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`);
-      objects.set(contentId, `<< /Length ${Buffer.byteLength(commands)} >>\nstream\n${commands}\nendstream`);
+      const pageId = pageIds[index]; const contentId = pageId + 1; const commands: string[] = ["q", "0.91 0.27 0.16 rg", "0 744 612 48 re f", "Q", `BT /F2 9 Tf 0.35 0.10 0.06 rg 50 718 Td (REVENUE OPERATIONS REPORT) Tj ET`, `BT /F2 15 Tf 1 1 1 rg 50 765 Td (${escape(ascii(String(report.title || "Kivora report")).slice(0, 72))}) Tj ET`, `BT /F1 8 Tf 0.38 0.40 0.44 rg 50 701 Td (${escape(`${String(report.type || "report").toUpperCase()}  |  ${String(report.currency || "USD")}  |  ${new Date(report.createdAt || Date.now()).toLocaleDateString("en-US")}`)}) Tj ET`];
+      let y = 677;
+      for (const line of page) { if (!line.text) { y -= 7; continue; } const heading = line.style === "heading"; commands.push(`BT /${heading ? "F2" : "F1"} ${heading ? 11 : 9} Tf ${heading ? "0.91 0.27 0.16" : "0.15 0.17 0.20"} rg 50 ${y} Td (${escape(line.text)}) Tj ET`); y -= heading ? 19 : 14; }
+      commands.push("q", "0.88 0.89 0.91 RG", "50 38 m 562 38 l S", "Q", `BT /F1 8 Tf 0.42 0.44 0.48 rg 50 22 Td (Kivora - Live portfolio intelligence) Tj ET`, `BT /F1 8 Tf 0.42 0.44 0.48 rg 520 22 Td (${index + 1} / ${pages.length}) Tj ET`);
+      const stream = commands.join("\n"); objects.set(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`); objects.set(contentId, `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`);
     });
-    let pdf = "%PDF-1.4\n"; const offsets = [0];
-    for (let id = 1; id <= objectCount; id++) { offsets[id] = Buffer.byteLength(pdf); pdf += `${id} 0 obj\n${objects.get(id)}\nendobj\n`; }
-    const xref = Buffer.byteLength(pdf); pdf += `xref\n0 ${objectCount + 1}\n0000000000 65535 f \n`;
-    for (let id = 1; id <= objectCount; id++) pdf += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`;
-    pdf += `trailer\n<< /Size ${objectCount + 1} /Root 1 0 R /Info 4 0 R >>\nstartxref\n${xref}\n%%EOF`;
-    return Buffer.from(pdf, "binary");
+    let pdf = "%PDF-1.4\n"; const offsets = [0]; for (let id = 1; id <= objectCount; id++) { offsets[id] = Buffer.byteLength(pdf); pdf += `${id} 0 obj\n${objects.get(id)}\nendobj\n`; } const xref = Buffer.byteLength(pdf); pdf += `xref\n0 ${objectCount + 1}\n0000000000 65535 f \n`; for (let id = 1; id <= objectCount; id++) pdf += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`; pdf += `trailer\n<< /Size ${objectCount + 1} /Root 1 0 R /Info 5 0 R >>\nstartxref\n${xref}\n%%EOF`; return Buffer.from(pdf, "binary");
   }
 
   private total(data: RecommendationResponse) { return (data.data ?? []).slice(0, 30).reduce((sum, item) => sum + (Number(item.price) || 0), 0); }

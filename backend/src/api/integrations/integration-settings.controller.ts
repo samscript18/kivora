@@ -1,3 +1,31 @@
-import{Body,Controller,Delete,Get,Param,Patch,Post,UseGuards}from"@nestjs/common";import{CurrentUser}from"../../shared/decorators/current-user.decorator";import{AuthenticatedUser,PrivyAuthGuard}from"../auth/guards/privy-auth.guard";import{OrganizationIntegrationService}from"./services/organization-integration.service";
-@Controller("integration-settings")@UseGuards(PrivyAuthGuard)
-export class IntegrationSettingsController{constructor(private readonly settings:OrganizationIntegrationService){}@Get()list(@CurrentUser()u:AuthenticatedUser){return this.settings.list(u);}@Patch(":provider")update(@Param("provider")p:string,@Body()b:any,@CurrentUser()u:AuthenticatedUser){return this.settings.update(u,p,b);}@Post(":provider/test")test(@Param("provider")p:string,@CurrentUser()u:AuthenticatedUser){return this.settings.test(u,p);}@Delete(":provider/credential")revoke(@Param("provider")p:string,@CurrentUser()u:AuthenticatedUser){return this.settings.revoke(u,p);}@Get("notifications/preferences")preferences(@CurrentUser()u:AuthenticatedUser){return this.settings.getPreferences(u);}@Patch("notifications/preferences/:scope")save(@Param("scope")s:string,@Body()b:any,@CurrentUser()u:AuthenticatedUser){return this.settings.savePreferences(u,s,b);}}
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../../shared/decorators/current-user.decorator';
+import { AuthenticatedUser, PrivyAuthGuard } from '../auth/guards/privy-auth.guard';
+import { OrganizationIntegrationService } from './services/organization-integration.service';
+@Controller('integration-settings')
+@UseGuards(PrivyAuthGuard)
+export class IntegrationSettingsController {
+  constructor(private readonly settings: OrganizationIntegrationService) {}
+  @Get() list(@CurrentUser() u: AuthenticatedUser) {
+    return this.settings.list(u);
+  }
+  @Patch(':provider') update(@Param('provider') p: string, @Body() b: any, @CurrentUser() u: AuthenticatedUser) {
+    return this.settings.update(u, p, b);
+  }
+  @Post(':provider/test') test(@Param('provider') p: string, @CurrentUser() u: AuthenticatedUser) {
+    return this.settings.test(u, p);
+  }
+  @Delete(':provider/credential') revoke(@Param('provider') p: string, @CurrentUser() u: AuthenticatedUser) {
+    return this.settings.revoke(u, p);
+  }
+  @Get('notifications/preferences') preferences(@CurrentUser() u: AuthenticatedUser) {
+    return this.settings.getPreferences(u);
+  }
+  @Patch('notifications/preferences/:scope') save(
+    @Param('scope') s: string,
+    @Body() b: any,
+    @CurrentUser() u: AuthenticatedUser,
+  ) {
+    return this.settings.savePreferences(u, s, b);
+  }
+}

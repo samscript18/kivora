@@ -30,7 +30,7 @@ export class GroqService {
 
   async report(type: "executive" | "portfolio" | "owner" | "revenue", input: unknown) {
     const audience = type === "owner" ? "a property owner" : type === "executive" ? "an executive leadership team" : "a revenue management team";
-    return this.complete(`Write a concise ${type} report for ${audience} using only the supplied JSON. Clearly distinguish measured values from estimates, include next actions, and never invent metrics.`, JSON.stringify(input));
+    return this.complete(`Write a polished ${type} report for ${audience} using only the supplied JSON. Use short Markdown section headings and bullet points, clearly distinguish measured values from estimates, include practical next actions, and never invent metrics. Never return formatting markers without meaningful text.`, JSON.stringify(input));
   }
 
   async answer(question: string, context: unknown) {

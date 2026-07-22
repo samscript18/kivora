@@ -1,4 +1,4 @@
-import { createCipheriv, createHash, randomBytes } from "crypto";
+import { createCipheriv, randomBytes } from "crypto";
 import mongoose from "mongoose";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
@@ -19,7 +19,8 @@ const targets: LegacyTarget[] = [
 ];
 
 function encrypt(plaintext: string, secret: string) {
-  const key = createHash("sha256").update(secret).digest(); const iv = randomBytes(12);
+  if (!/^[a-fA-F0-9]{64}$/.test(secret)) throw new Error("WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY must be exactly 64 hexadecimal characters");
+  const key = Buffer.from(secret, "hex"); const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv); const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   return `v1.${iv.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}.${ciphertext.toString("base64url")}`;
 }

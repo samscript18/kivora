@@ -57,7 +57,7 @@ export class MarketIntelligenceService {
         }
       });
     }
-    if(organizationId){await this.organizationSettings.record(organizationId,"ticketmaster",errors.find(e=>e.provider==="Ticketmaster")?.message).catch(()=>undefined);await this.organizationSettings.record(organizationId,"openweather",errors.find(e=>e.provider==="OpenWeather")?.message).catch(()=>undefined);}return { source: "live external APIs", clusters: clusters.length, events, weather, errors, capabilities: this.capabilities() };
+    if(organizationId){if(ticket)await this.organizationSettings.record(organizationId,"ticketmaster",errors.find(e=>e.provider==="Ticketmaster")?.message).catch(()=>undefined);if(weatherConfig)await this.organizationSettings.record(organizationId,"openweather",errors.find(e=>e.provider==="OpenWeather")?.message).catch(()=>undefined);}return { source: "live external APIs", clusters: clusters.length, events, weather, errors, capabilities: this.capabilities() };
   }
 
   list(organizationId?: string) { return this.signals.find({ ...(organizationId ? { organizationId: new Types.ObjectId(organizationId) } : {}), expiresAt: { $gt: new Date() } }).sort({ startsAt: 1, confidence: -1 }).limit(100).lean(); }
@@ -102,19 +102,21 @@ export class MarketIntelligenceService {
 
   private async refreshWeather(cluster: { latitude: number; longitude: number; listingIds: string[]; location: string }, organizationId?: string, portfolioId?: string,credential?:string,settings:any={}) {
     const response = await firstValueFrom(this.http.get<Forecast>(`${this.weatherBase}/data/2.5/forecast`, { params: { lat: cluster.latitude, lon: cluster.longitude, appid:credential||this.weatherKey, units: "metric" } }));
-    const threshold=Number(settings.weatherAlertThreshold||.65),horizon=Number(settings.forecastHorizonDays||5)*86400000;const risky = (response.data.list ?? []).filter((item) => item.dt*1000<=Date.now()+horizon&&((item.pop ?? 0) >=threshold || (item.rain?.["3h"] ?? 0) >= 8 || (item.wind?.speed ?? 0) >= 14 || (item.main?.temp ?? 20) >= 38 || (item.main?.temp ?? 20) <= -8));
-    if (!risky.length) return 0;
-    const first = risky[0];
-    const end = risky[risky.length - 1];
-    const descriptions = [...new Set(risky.flatMap((item) => item.weather?.map((weather) => weather.description).filter((value): value is string => Boolean(value)) ?? []))];
-    const externalId = `openweather:${cluster.latitude.toFixed(2)}:${cluster.longitude.toFixed(2)}:${new Date(first.dt * 1000).toISOString().slice(0, 10)}`;
+    const threshold=Number(settings.weatherAlertThreshold??.65),horizon=Number(settings.forecastHorizonDays||5)*86400000;
+    const forecast=(response.data.list??[]).filter((item)=>item.dt*1000>=Date.now()-3*60*60_000&&item.dt*1000<=Date.now()+horizon);
+    if(!forecast.length)return 0;
+    const material=forecast.filter((item)=>(item.pop??0)>=threshold||(item.rain?.["3h"]??0)>=8||(item.wind?.speed??0)>=14||(item.main?.temp??20)>=38||(item.main?.temp??20)<=-8);
+    const selected=material.length?material:forecast.slice(0,Math.min(8,forecast.length));
+    const first=selected[0];const end=selected[selected.length-1];
+    const descriptions=[...new Set(selected.flatMap((item)=>item.weather?.map((weather)=>weather.description).filter((value):value is string=>Boolean(value))??[]))];
+    const externalId = `openweather:${cluster.latitude.toFixed(2)}:${cluster.longitude.toFixed(2)}:${new Date().toISOString().slice(0, 10)}`;
     const scope = organizationId ? { organizationId: new Types.ObjectId(organizationId) } : {};
     await this.signals.findOneAndUpdate({ ...scope, externalId }, { $set: {
       ...scope, ...(portfolioId ? { portfolioId: new Types.ObjectId(portfolioId) } : {}),
-      kind: "weather", title: descriptions[0] ? `Weather watch: ${descriptions[0]}` : "Material weather change", description: descriptions.join(", "), location: cluster.location,
+      kind: "weather", title: descriptions[0] ? `${material.length?"Weather watch":"Forecast"}: ${descriptions[0]}` : "Local weather forecast", description: descriptions.join(", ") || "Live forecast available", location: cluster.location,
       latitude: cluster.latitude, longitude: cluster.longitude, startsAt: new Date(first.dt * 1000), endsAt: new Date(end.dt * 1000), demandDirection: "mixed",
-      confidence: 74, affectedListings: cluster.listingIds.length, listingIds: cluster.listingIds, source: "OpenWeather 5-day forecast",
-      evidence: { forecastIntervals: risky.length, maximumRainMm: Math.max(...risky.map((item) => item.rain?.["3h"] ?? 0)), maximumWindMps: Math.max(...risky.map((item) => item.wind?.speed ?? 0)), probabilityOfPrecipitation: Math.max(...risky.map((item) => item.pop ?? 0)) },
+      confidence: material.length?74:62, affectedListings: cluster.listingIds.length, listingIds: cluster.listingIds, source: "OpenWeather 5-day forecast",
+      evidence: { materialAlert:material.length>0,forecastIntervals:selected.length,minimumTemperatureC:Math.min(...selected.map((item)=>item.main?.temp??0)),maximumTemperatureC:Math.max(...selected.map((item)=>item.main?.temp??0)),maximumRainMm:Math.max(...selected.map((item)=>item.rain?.["3h"]??0)),maximumWindMps:Math.max(...selected.map((item)=>item.wind?.speed??0)),probabilityOfPrecipitation:Math.max(...selected.map((item)=>item.pop??0)) },
       expiresAt: new Date(end.dt * 1000 + 86_400_000),
     } }, { upsert: true });
     return 1;
