@@ -756,6 +756,7 @@ export class RevenueService {
     if (!Types.ObjectId.isValid(id)) throw new BadRequestException("Report identifier is invalid");
     const report: any = await this.reports.findOne({ _id: new Types.ObjectId(id), organizationId: new Types.ObjectId(actor.organizationId) }).lean();
     if (!report) throw new NotFoundException("Report not found");
+    report.body = this.reportBody(report.body, report.type || "executive", report.metrics || {});
     const safeName = String(report.title || "kivora-report").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
     const buffer = format === "pdf" ? this.createPdf(report) : this.createCsv(report);
     await this.audits.create({ organizationId: new Types.ObjectId(actor.organizationId), actorUserId: new Types.ObjectId(actor.sub), actor: actor.name, action: "report_downloaded", entityType: "report", entityId: id, after: { format, bytes: buffer.length }, source: "Kivora", verified: true });

@@ -183,7 +183,7 @@ export default function ReportsPage() {
                       {item.status}
                     </span>
                   </div>
-                  <div className="rounded-2xl border border-white/[0.05] bg-black/20 p-5"><RichText text={item.body}/></div>
+                  <div className="rounded-2xl border border-white/[0.05] bg-black/20 p-5"><RichText text={readableReportBody(item)}/></div>
                   <div className="flex flex-wrap items-center gap-2 border-t border-white/5 pt-4"><div className="mr-auto text-[9px] font-mono uppercase tracking-[0.12em] text-slate-500">Live portfolio evidence · {item.currency || "USD"}</div>{item.status === "draft" && <button onClick={() => finalizeMutation.mutate(item._id)} className="rounded-lg bg-accent px-3 py-2 text-[10px] font-semibold text-white">Finalize</button>}{["ready", "shared"].includes(item.status) && <button onClick={()=>deliverMutation.mutate(item._id)} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/20 px-3 py-2 text-[10px] text-emerald-300"><Send size={12}/> Deliver</button>}<button onClick={() => downloadReport(item._id, "pdf").catch((error) => toast.error(error instanceof Error ? error.message : "PDF download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border bg-white/[0.02] px-3 py-2 text-[10px] font-semibold"><Download size={12}/> Styled PDF</button><button onClick={() => downloadReport(item._id, "csv").catch((error) => toast.error(error instanceof Error ? error.message : "CSV download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border bg-white/[0.02] px-3 py-2 text-[10px] font-semibold"><Download size={12}/> Detailed CSV</button></div>
                   </div>
                 </article>
@@ -254,4 +254,9 @@ export default function ReportsPage() {
       )}
     </div>
   );
+}
+
+function readableReportBody(report: Report) {
+  if (String(report.body || "").replace(/[*_#`\s-]/g, "").length >= 20) return report.body;
+  return "## This report needs to be regenerated\nThe previous report did not contain readable narrative content. Generate a new report to rebuild it from the latest live portfolio evidence. Existing audit history has been preserved.";
 }
