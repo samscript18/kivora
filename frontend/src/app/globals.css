@@ -254,14 +254,210 @@ input, textarea, select { font-family: inherit; }
   background-size: 28px 28px;
 }
 
+/* ─── Shared Kivora atmosphere ─────────────────────────────────────────────── */
+.landing-page,
+.app-environment {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 12% -8%, rgba(232,68,42,.075), transparent 31rem),
+    radial-gradient(circle at 92% 8%, rgba(212,164,22,.045), transparent 28rem),
+    #080809;
+}
+
+.landing-page::before,
+.landing-page::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  width: 42rem;
+  height: 42rem;
+  border-radius: 999px;
+  filter: blur(110px);
+  pointer-events: none;
+  opacity: .22;
+  will-change: transform;
+}
+.landing-page::before {
+  left: -18rem;
+  top: 18vh;
+  background: rgba(232,68,42,.25);
+  animation: landing-drift-one 19s ease-in-out infinite alternate;
+}
+.landing-page::after {
+  right: -22rem;
+  top: 48vh;
+  background: rgba(212,164,22,.16);
+  animation: landing-drift-two 24s ease-in-out infinite alternate;
+}
+
+.landing-page section {
+  transform-style: preserve-3d;
+}
+.landing-page section::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 9%;
+  left: -30%;
+  width: 24%;
+  height: 82%;
+  pointer-events: none;
+  opacity: .16;
+  transform: skewX(-18deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.055), transparent);
+  animation: section-light-pass 12s cubic-bezier(.16,1,.3,1) infinite;
+}
+.landing-page article {
+  transition: border-color .45s cubic-bezier(.16,1,.3,1), box-shadow .45s cubic-bezier(.16,1,.3,1);
+}
+.landing-page article:hover {
+  border-color: rgba(232,68,42,.2);
+  box-shadow: 0 30px 90px rgba(0,0,0,.35), 0 0 45px rgba(232,68,42,.055);
+}
+
+.app-grid {
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(circle at 55% 28%, black, transparent 78%);
+  opacity: .32;
+}
+.app-aurora {
+  z-index: 0;
+  width: 38rem;
+  height: 38rem;
+  border-radius: 999px;
+  filter: blur(105px);
+  opacity: .18;
+  will-change: transform;
+}
+.app-aurora-one {
+  left: 16%;
+  top: -20rem;
+  background: rgba(232,68,42,.38);
+  animation: app-aurora-one 17s ease-in-out infinite alternate;
+}
+.app-aurora-two {
+  right: -18rem;
+  top: 38%;
+  background: rgba(212,164,22,.22);
+  animation: app-aurora-two 23s ease-in-out infinite alternate;
+}
+.app-light-sweep {
+  z-index: 0;
+  overflow: hidden;
+  background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.015) 50%, transparent 60%);
+  background-size: 220% 100%;
+  animation: app-light-sweep 13s ease-in-out infinite;
+}
+
+.kivora-mark {
+  background: conic-gradient(from 180deg, #ff1301, #f5b51b, #ff1301);
+  box-shadow: 0 0 28px rgba(232,68,42,.13);
+  animation: mark-breathe 5s ease-in-out infinite;
+}
+.sidebar-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.05), transparent 65%);
+  transform: translateX(-125%);
+  transition: transform .7s cubic-bezier(.16,1,.3,1);
+}
+.sidebar-link:hover::after { transform: translateX(125%); }
+
+/* Keep every operational surface within its own layout boundary. */
+.dashboard-surface,
+.dashboard-surface > *,
+.dashboard-surface :where(section, article, .card, .card-elevated, .glass-card) {
+  min-width: 0;
+  max-width: 100%;
+}
+.dashboard-surface .card,
+.dashboard-surface .card-elevated,
+.dashboard-surface .glass-card {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  background:
+    radial-gradient(circle at 100% 0, rgba(232,68,42,.032), transparent 35%),
+    rgba(13,13,16,.84);
+  border-color: rgba(255,255,255,.075);
+  transition:
+    transform .42s cubic-bezier(.16,1,.3,1),
+    border-color .42s cubic-bezier(.16,1,.3,1),
+    box-shadow .42s cubic-bezier(.16,1,.3,1);
+}
+.dashboard-surface .card:hover,
+.dashboard-surface .card-elevated:hover {
+  transform: translateY(-2px);
+  border-color: rgba(232,68,42,.16);
+  box-shadow: 0 24px 75px rgba(0,0,0,.34), 0 0 35px rgba(232,68,42,.035), inset 0 1px 0 rgba(255,255,255,.045);
+}
+.dashboard-surface .card::after,
+.dashboard-surface .card-elevated::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(112deg, transparent 32%, rgba(255,255,255,.032), transparent 68%);
+  transform: translateX(-120%);
+  transition: transform .9s cubic-bezier(.16,1,.3,1);
+}
+.dashboard-surface .card:hover::after,
+.dashboard-surface .card-elevated:hover::after { transform: translateX(120%); }
+.dashboard-surface :where(h1,h2,h3,h4,p,pre,code) {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.dashboard-surface pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dashboard-surface :where(input,textarea,select,table) { max-width: 100%; }
+
+@keyframes landing-drift-one {
+  to { transform: translate3d(34vw, 18vh, 0) scale(1.18); }
+}
+@keyframes landing-drift-two {
+  to { transform: translate3d(-30vw, 22vh, 0) scale(.82); }
+}
+@keyframes section-light-pass {
+  0%, 14% { left: -30%; opacity: 0; }
+  24% { opacity: .16; }
+  48%, 100% { left: 115%; opacity: 0; }
+}
+@keyframes app-aurora-one {
+  to { transform: translate3d(32vw, 18vh, 0) scale(1.12); }
+}
+@keyframes app-aurora-two {
+  to { transform: translate3d(-28vw, -18vh, 0) scale(.84); }
+}
+@keyframes app-light-sweep {
+  0%, 20% { background-position: 180% 0; }
+  70%, 100% { background-position: -120% 0; }
+}
+@keyframes mark-breathe {
+  0%, 100% { filter: saturate(1); box-shadow: 0 0 22px rgba(232,68,42,.1); }
+  50% { filter: saturate(1.35); box-shadow: 0 0 34px rgba(232,68,42,.23); }
+}
+
 /* ─── Reduced motion ────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .hero-orb, .hero-orb-delayed, .signal-marquee, .live-dot { animation: none !important; }
+  .hero-orb, .hero-orb-delayed, .signal-marquee, .live-dot,
+  .landing-page::before, .landing-page::after, .landing-page section::before,
+  .app-aurora, .app-light-sweep, .kivora-mark { animation: none !important; }
   .skeleton { animation: none !important; background: rgba(255,255,255,0.05); }
   * { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
 
 /* ─── Responsive helpers ────────────────────────────────────────────────────── */
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .desktop-only { display: none !important; }
 }

@@ -4,6 +4,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboard, QUERY_KEYS } from "@/lib/api";
 import { SyncStatus } from "@/components/ui/SyncStatus";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const pageTitles: Record<string, { title: string; subtitle?: string }> = {
@@ -39,10 +40,10 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
   const initials = (user?.email?.address ?? "U").slice(0, 1).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-30 flex h-[72px] items-center gap-3 border-b border-white/[0.05] bg-canvas/85 px-4 backdrop-blur-xl sm:px-7">
+    <header className="dashboard-topbar sticky top-3 z-30 mx-3 mt-3 flex min-h-[68px] items-center gap-3 rounded-[22px] border border-white/[0.07] bg-[#0c0c0f]/80 px-3 shadow-[0_20px_70px_rgba(0,0,0,.32)] backdrop-blur-2xl sm:mx-5 sm:px-5">
       {/* Mobile menu button */}
       <button
-        className="grid h-9 w-9 place-items-center rounded-lg border border-border text-slate-400 hover:bg-white/5 md:hidden"
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border text-slate-400 transition hover:bg-white/5 lg:hidden"
         onClick={onMenuOpen}
         aria-label="Open navigation"
       >
@@ -50,13 +51,13 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
       </button>
 
       {/* Page title */}
-      <div className="min-w-0 flex-1">
-        <h1 className="font-display truncate text-[16px] font-semibold tracking-tight text-foreground">
+      <div className="min-w-0 flex-1 py-2">
+        <h1 className="truncate font-display text-[15px] font-bold tracking-[-.035em] text-foreground sm:text-[17px]">
           {page.title}
         </h1>
-        <div className="flex items-center gap-3">
+        <div className="mt-0.5 flex min-w-0 items-center gap-2.5">
           {page.subtitle && (
-            <span className="hidden text-[10px] text-slate-500 sm:block">{page.subtitle}</span>
+            <span className="hidden truncate text-[10px] text-slate-500 lg:block">{page.subtitle}</span>
           )}
           <SyncStatus
             connected={!!data}
@@ -66,23 +67,23 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
       </div>
 
       {/* Right section */}
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {/* Search (placeholder — navigates to assistant) */}
-        <a
+        <Link
           href="/dashboard/assistant"
-          className="hidden items-center gap-2 rounded-xl border border-border bg-elevated px-3 py-2 text-[11px] text-slate-500 hover:text-slate-300 sm:flex"
+          className="hidden h-10 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-4 text-[11px] text-slate-500 transition hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-slate-300 xl:flex"
           aria-label="Search or ask Kivora"
         >
           <Search size={13} />
           <span>Ask Kivora…</span>
           <kbd className="ml-2 rounded border border-white/10 px-1 py-0.5 font-mono text-[9px] text-slate-600">⌘K</kbd>
-        </a>
+        </Link>
 
         {/* Notification bell */}
-        <a
-          href="/dashboard/incidents"
-          className="relative grid h-9 w-9 place-items-center rounded-xl border border-border text-slate-400 hover:bg-white/5"
-          aria-label={`${criticalCount} critical incidents`}
+        <Link
+          href="/dashboard/activity"
+          className="relative grid h-10 w-10 place-items-center rounded-full border border-white/[0.08] bg-white/[0.02] text-slate-400 transition hover:border-accent/25 hover:bg-accent/[0.06] hover:text-white"
+          aria-label={`Open activity and notifications. ${criticalCount} critical incidents`}
         >
           <Bell size={15} />
           {criticalCount > 0 && (
@@ -90,19 +91,19 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
               {criticalCount > 9 ? "9+" : criticalCount}
             </span>
           )}
-        </a>
+        </Link>
 
-        <div className="hidden h-9 w-9 place-items-center rounded-xl bg-accent/10 font-mono text-xs font-bold text-accent sm:grid" aria-hidden="true">
+        <div className="hidden h-10 w-10 place-items-center rounded-full border border-accent/15 bg-accent/10 font-mono text-xs font-bold text-accent sm:grid" aria-hidden="true">
           {initials}
         </div>
         <button
           type="button"
           onClick={() => void logout()}
-          className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white/[0.02] px-3 text-[11px] font-semibold text-slate-300 transition-colors hover:border-red-500/25 hover:bg-red-500/[0.06] hover:text-red-300"
+          className="inline-flex h-10 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-3 text-[11px] font-semibold text-slate-300 transition hover:border-red-500/25 hover:bg-red-500/[0.06] hover:text-red-300"
           aria-label="Log out of Kivora"
         >
           <LogOut size={14} />
-          <span>Log out</span>
+          <span className="hidden lg:inline">Log out</span>
         </button>
       </div>
     </header>

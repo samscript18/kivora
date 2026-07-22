@@ -119,23 +119,23 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border gap-6 text-xs font-semibold">
+      <div className="flex max-w-full gap-5 overflow-x-auto border-b border-border text-xs font-semibold scrollbar-none">
         <button
           onClick={() => setActiveTab("integrations")}
-          className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${
+          className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${
             activeTab === "integrations" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"
           }`}
         >
           <Zap size={15} /> Integrations & Mobile Bot
         </button>
-        <button onClick={() => setActiveTab("workspace")} className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "workspace" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><ShieldCheck size={15}/> Organization</button>
-        <button onClick={() => setActiveTab("team")} className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "team" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Team</button>
-        <button onClick={() => setActiveTab("portfolios")} className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "portfolios" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Portfolios</button>
-        <button onClick={() => setActiveTab("intelligence")} className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "intelligence" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Sparkles size={15}/> Intelligence</button>
-        <button onClick={() => setActiveTab("notifications")} className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "notifications" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><MessageCircle size={15}/> Notifications</button>
+        <button onClick={() => setActiveTab("workspace")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "workspace" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><ShieldCheck size={15}/> Organization</button>
+        <button onClick={() => setActiveTab("team")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "team" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Team</button>
+        <button onClick={() => setActiveTab("portfolios")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "portfolios" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Portfolios</button>
+        <button onClick={() => setActiveTab("intelligence")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "intelligence" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Sparkles size={15}/> Intelligence</button>
+        <button onClick={() => setActiveTab("notifications")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "notifications" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><MessageCircle size={15}/> Notifications</button>
         <button
           onClick={() => setActiveTab("segments")}
-          className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${
+          className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${
             activeTab === "segments" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"
           }`}
         >
@@ -143,7 +143,7 @@ export default function SettingsPage() {
         </button>
         <button
           onClick={() => setActiveTab("underwrite")}
-          className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${
+          className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${
             activeTab === "underwrite" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"
           }`}
         >
