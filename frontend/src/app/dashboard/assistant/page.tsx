@@ -68,7 +68,7 @@ export default function AssistantPage() {
   };
 
   return (
-    <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -80,11 +80,11 @@ export default function AssistantPage() {
             Natural-language answers grounded strictly in your latest live portfolio data.
           </p>
         </div>
-        <div className="flex items-center gap-2"><span className="rounded-full border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Portfolio grounded</span>{messages.length > 0 && <button onClick={() => window.confirm("Clear your saved Kivora conversation?") && clearMutation.mutate()} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[10px] text-slate-400 hover:text-foreground"><Trash2 size={12}/> Clear chat</button>}</div>
+        <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Portfolio grounded</span>{messages.length > 0 && <button onClick={() => window.confirm("Clear your saved Kivora conversation?") && clearMutation.mutate()} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[10px] text-slate-400 hover:text-foreground"><Trash2 size={12}/> Clear chat</button>}</div>
       </div>
 
       {/* Suggested Prompts */}
-      <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
+      <div className="mobile-scroll-row flex items-center gap-2 pb-1">
         <HelpCircle size={14} className="text-slate-500 flex-shrink-0" />
         <span className="text-[11px] text-slate-500 flex-shrink-0">Suggested:</span>
         {suggestedPrompts.map((prompt) => (
@@ -100,9 +100,9 @@ export default function AssistantPage() {
       </div>
 
       {/* Chat Container */}
-      <div className="card rounded-2xl flex flex-col h-[520px] overflow-hidden">
+      <div className="card flex h-[min(620px,calc(100dvh-190px))] min-h-[430px] flex-col overflow-hidden rounded-2xl">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 space-y-4 overflow-y-auto p-3 sm:p-5">
           {historyQuery.isLoading ? <div className="grid h-full place-items-center text-xs text-slate-500">Loading your conversation…</div> : messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
               <span className="grid h-12 w-12 place-items-center rounded-2xl bg-accent/10 text-accent">
@@ -127,7 +127,7 @@ export default function AssistantPage() {
                     </span>
                   )}
                   <div
-                    className={`max-w-xl rounded-2xl p-4 text-xs leading-relaxed ${
+                    className={`min-w-0 max-w-[calc(100%-2.75rem)] rounded-2xl p-3 text-xs leading-relaxed sm:max-w-xl sm:p-4 ${
                       isUser
                         ? "bg-accent text-white font-medium"
                         : "border border-border bg-elevated text-slate-200"
@@ -154,19 +154,19 @@ export default function AssistantPage() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-border p-4 bg-elevated/50 flex gap-2">
+        <div className="flex gap-2 border-t border-border bg-elevated/50 p-3 sm:p-4">
           <input
             type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Ask Kivora about your live portfolio..."
-            className="flex-1 rounded-xl border border-border bg-elevated px-4 py-3 text-xs text-foreground placeholder-slate-500 outline-none focus:border-accent"
+            className="min-w-0 flex-1 rounded-xl border border-border bg-elevated px-3 py-3 text-xs text-foreground placeholder-slate-500 outline-none focus:border-accent sm:px-4"
           />
           <button
             disabled={!question.trim() || askMutation.isPending}
             onClick={() => handleSend()}
-            className="rounded-xl bg-accent px-5 text-white font-bold text-xs hover:bg-accent/90 disabled:opacity-40 transition-colors"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent text-xs font-bold text-white transition-colors hover:bg-accent/90 disabled:opacity-40 sm:w-auto sm:px-5"
           >
             <Send size={15} />
           </button>

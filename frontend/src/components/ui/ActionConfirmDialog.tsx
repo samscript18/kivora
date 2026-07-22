@@ -53,13 +53,13 @@ export function ActionConfirmDialog({
             role="dialog"
             aria-modal="true"
             aria-labelledby="dialog-title"
-            className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+            className="fixed inset-0 z-[80] flex items-end justify-center overflow-y-auto p-3 sm:items-center sm:p-4"
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ type: "spring", damping: 26, stiffness: 300 }}
           >
-            <div className="card w-full max-w-md rounded-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="card max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl p-5 sm:p-6" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   {variant === "destructive" && (
@@ -87,7 +87,7 @@ export function ActionConfirmDialog({
                 </div>
               )}
 
-              <div className="mt-5 flex gap-2">
+              <div className="mt-5 flex flex-col-reverse gap-2 min-[380px]:flex-row">
                 <button
                   onClick={onClose}
                   disabled={loading}

@@ -32,7 +32,7 @@ export default function IncidentsPage() {
   const totalAtRisk = incidents.reduce((acc, curr) => acc + (curr.revenueAtRisk || 0), 0);
 
   return (
-    <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -44,7 +44,7 @@ export default function IncidentsPage() {
             Detected pricing overrides, sync failures, and revenue leaks across your portfolio.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <SourceBadge source="wheelhouse" />
           <div className="card rounded-xl px-4 py-2 text-right">
             <div className="text-[9px] uppercase font-mono text-slate-500">Total Revenue At Risk</div>
@@ -75,16 +75,16 @@ export default function IncidentsPage() {
           {incidents.map((item) => (
             <article
               key={item.id}
-              className="card rounded-2xl p-6 flex flex-col justify-between space-y-4 hover:border-white/15 transition-colors"
+              className="card flex flex-col justify-between space-y-4 rounded-2xl p-4 transition-colors hover:border-white/15 sm:p-6"
             >
               <div className="space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-red-500/10 text-red-400">
                       <AlertTriangle size={20} />
                     </span>
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
                         <StatusBadge variant={item.severity || "critical"} />
                         <span className="text-[10px] text-slate-500 font-mono">
                           {item.detectedAt}
@@ -93,7 +93,7 @@ export default function IncidentsPage() {
                       <h3 className="font-bold text-foreground text-sm leading-snug mt-1">{item.title}</h3>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="ml-auto shrink-0 text-right">
                     <div className="text-base font-bold text-red-400">{money(item.revenueAtRisk)}</div>
                     <div className="text-[9px] uppercase text-slate-500 font-mono">At Risk</div>
                   </div>
@@ -123,11 +123,11 @@ export default function IncidentsPage() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-white/5">
+              <div className="flex flex-col items-start justify-between gap-3 border-t border-white/5 pt-3 min-[390px]:flex-row min-[390px]:items-center">
                 <ConfidenceIndicator value={item.confidence || 90} />
 
                   <button onClick={() => setSelectedIncident(item)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-xs font-bold text-white hover:bg-accent/90 transition-colors"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-accent/90 min-[390px]:w-auto"
                   >
                     <ShieldCheck size={14} /> Investigate & Act
                   </button>

@@ -40,15 +40,15 @@ export function InvitationAcceptance({ token }: { token: string }) {
   if (!token) return <InvitationMessage title="This invitation link is incomplete." body="Ask the workspace administrator to create a new invitation link." />;
 
   return (
-    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-canvas p-5">
+    <main className="relative grid min-h-[100dvh] place-items-center overflow-hidden bg-canvas p-3 sm:p-5">
       <div className="hero-orb absolute left-[8%] top-[12%] h-52 w-52 rounded-full border border-accent/20" />
       <div className="hero-orb-delayed absolute bottom-[8%] right-[8%] h-72 w-72 rounded-full border border-amber-300/10" />
-      <section className="glass-card relative z-10 w-full max-w-lg overflow-hidden rounded-[28px] p-7 text-center sm:p-10">
+      <section className="glass-card relative z-10 w-full max-w-lg overflow-hidden rounded-[24px] p-5 text-center sm:rounded-[28px] sm:p-10">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-accent/25 bg-accent/10 text-accent">
           {acceptance.isSuccess ? <CheckCircle2 size={24} /> : <UserPlus size={24} />}
         </span>
         <div className="eyebrow mt-6">Secure team invitation</div>
-        <h1 className="mt-3 font-display text-3xl font-bold tracking-[-.05em]">Join the Kivora workspace</h1>
+        <h1 className="mt-3 font-display text-2xl font-bold tracking-[-.05em] sm:text-3xl">Join the Kivora workspace</h1>
         <p className="mx-auto mt-3 max-w-sm text-sm leading-7 text-slate-400">
           Sign in with the exact email address that received this invitation. Kivora will verify the single-use link before adding you to the team.
         </p>
@@ -75,5 +75,5 @@ export function InvitationAcceptance({ token }: { token: string }) {
 }
 
 function InvitationMessage({ title, body }: { title: string; body: string }) {
-  return <main className="grid min-h-screen place-items-center bg-canvas p-5"><section className="glass-card max-w-md rounded-[28px] p-8 text-center"><h1 className="font-display text-2xl font-bold">{title}</h1><p className="mt-3 text-sm leading-6 text-slate-400">{body}</p><Link href="/" className="mt-6 inline-block text-xs font-bold text-accent">Return to Kivora</Link></section></main>;
+  return <main className="grid min-h-[100dvh] place-items-center bg-canvas p-3 sm:p-5"><section className="glass-card max-w-md rounded-[24px] p-5 text-center sm:rounded-[28px] sm:p-8"><h1 className="font-display text-2xl font-bold">{title}</h1><p className="mt-3 text-sm leading-6 text-slate-400">{body}</p><Link href="/" className="mt-6 inline-block text-xs font-bold text-accent">Return to Kivora</Link></section></main>;
 }

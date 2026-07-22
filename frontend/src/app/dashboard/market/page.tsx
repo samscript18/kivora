@@ -32,7 +32,7 @@ export default function MarketIntelligencePage() {
   const signals: MarketSignal[] = data ?? [];
 
   return (
-    <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -45,8 +45,8 @@ export default function MarketIntelligencePage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-1.5">
             <SourceBadge source="ticketmaster" />
             <SourceBadge source="openweather" />
           </div>
@@ -87,11 +87,11 @@ export default function MarketIntelligencePage() {
             return (
               <article
                 key={signal.externalId}
-                className="card rounded-2xl p-6 flex flex-col justify-between space-y-4 hover:border-white/15 transition-colors"
+                className="card flex flex-col justify-between space-y-4 rounded-2xl p-4 transition-colors hover:border-white/15 sm:p-6"
               >
                 <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       <span
                         className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl ${
                           isEvent ? "bg-amber-500/10 text-amber-400" : "bg-sky-500/10 text-sky-400"
@@ -99,8 +99,8 @@ export default function MarketIntelligencePage() {
                       >
                         {isEvent ? <Sparkles size={20} /> : <CloudRain size={20} />}
                       </span>
-                      <div>
-                        <div className="flex items-center gap-2">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
                           <SourceBadge source={isEvent ? "ticketmaster" : "openweather"} />
                           <span className="text-[10px] font-mono text-slate-500 uppercase">
                             {signal.kind}
@@ -127,7 +127,7 @@ export default function MarketIntelligencePage() {
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-white/5 text-xs text-slate-500">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-3 text-xs text-slate-500">
                   <span>
                     <strong className="text-foreground font-semibold">{signal.affectedListings}</strong> Affected Listing{signal.affectedListings !== 1 ? "s" : ""}
                   </span>

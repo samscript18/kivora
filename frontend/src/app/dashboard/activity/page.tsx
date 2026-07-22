@@ -17,7 +17,7 @@ export default function ActivityPage() {
   const activities: ActivityEntry[] = data ?? [];
 
   return (
-    <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -54,12 +54,12 @@ export default function ActivityPage() {
           {activities.map((item, index) => {
             const date = new Date(item.createdAt);
             return (
-              <div key={item._id || `${item.action}-${item.createdAt}-${index}`} className="p-4 flex items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors">
-                <div className="flex items-center gap-3">
+              <div key={item._id || `${item.action}-${item.createdAt}-${index}`} className="flex flex-col items-start justify-between gap-3 p-4 transition-colors hover:bg-white/[0.02] sm:flex-row sm:items-center sm:gap-4">
+                <div className="flex min-w-0 items-center gap-3">
                   <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">
                     <ActivityIcon size={16} />
                   </span>
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-xs font-semibold text-foreground capitalize">
                       {String(item.action).replaceAll("_", " ")}
                     </div>
@@ -69,7 +69,7 @@ export default function ActivityPage() {
                   </div>
                 </div>
 
-                <div className="text-right">
+                <div className="pl-12 text-left sm:pl-0 sm:text-right">
                   <span className="font-mono text-[10px] text-slate-500">
                     {Number.isNaN(date.getTime()) ? "Just now" : date.toLocaleString()}
                   </span>

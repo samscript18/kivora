@@ -17,7 +17,7 @@ const sourceMap: Record<string, { label: string; cls: string }> = {
 export function SourceBadge({ source }: SourceBadgeProps) {
   const entry = sourceMap[source.toLowerCase()] ?? { label: source, cls: "bg-white/5 text-slate-400 border border-white/10" };
   return (
-    <span className={`inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-wider ${entry.cls}`}>
+    <span className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-wider ${entry.cls}`}>
       {entry.label}
     </span>
   );

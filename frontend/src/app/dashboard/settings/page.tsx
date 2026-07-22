@@ -103,7 +103,7 @@ export default function SettingsPage() {
   const isValidUnderwrite = address && Number(marketId) > 0 && Number(cost) > 0 && Number(expenses) >= 0;
 
   return (
-    <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -119,7 +119,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex max-w-full gap-5 overflow-x-auto border-b border-border text-xs font-semibold scrollbar-none">
+      <div className="mobile-scroll-row flex gap-5 border-b border-border text-xs font-semibold">
         <button
           onClick={() => setActiveTab("integrations")}
           className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${
@@ -156,13 +156,13 @@ export default function SettingsPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <WheelhouseConnectionsPanel />
           {/* Telegram Mobile Companion */}
-          <article className="card rounded-2xl p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
+          <article className="card space-y-4 rounded-2xl p-4 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-sky-500/10 text-sky-400">
                   <MessageCircle size={20} />
                 </span>
-                <div>
+                <div className="min-w-0">
                   <h3 className="font-bold text-foreground text-sm">Mobile Companion</h3>
                   <p className="text-[11px] text-slate-500">Real-time alerts, daily briefing, and one-tap approvals</p>
                 </div>
@@ -211,13 +211,13 @@ export default function SettingsPage() {
           </article>
 
           {/* Ticketmaster */}
-          <article className="card rounded-2xl p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
+          <article className="card space-y-4 rounded-2xl p-4 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-500/10 text-blue-400">
                   <Sparkles size={20} />
                 </span>
-                <div>
+                <div className="min-w-0">
                   <h3 className="font-bold text-foreground text-sm">Event Intelligence</h3>
                   <p className="text-[11px] text-slate-500">Live concert, sports, and venue demand signals</p>
                 </div>
@@ -233,13 +233,13 @@ export default function SettingsPage() {
           </article>
 
           {/* OpenWeather */}
-          <article className="card rounded-2xl p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
+          <article className="card space-y-4 rounded-2xl p-4 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-sky-500/10 text-sky-400">
                   <CloudSun size={20} />
                 </span>
-                <div>
+                <div className="min-w-0">
                   <h3 className="font-bold text-foreground text-sm">Weather Intelligence</h3>
                   <p className="text-[11px] text-slate-500">Weather forecast and travel impact data</p>
                 </div>
@@ -291,7 +291,7 @@ export default function SettingsPage() {
 
       {/* Underwrite Tab */}
       {activeTab === "underwrite" && (
-        <div className="card rounded-2xl p-6 space-y-6 max-w-3xl">
+        <div className="card max-w-3xl space-y-6 rounded-2xl p-4 sm:p-6">
           <div>
             <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
               <House className="text-accent" size={18} /> Live Market Acquisition Underwriting

@@ -60,7 +60,7 @@ export default function SimulatorPage() {
   const listings = portfolioQuery.data?.listings ?? [];
 
   return (
-    <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -76,7 +76,7 @@ export default function SimulatorPage() {
       </div>
 
       {/* Listing Selector */}
-      <div className="card rounded-2xl p-6 space-y-3">
+      <div className="card space-y-3 rounded-2xl p-4 sm:p-6">
         <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
           <Building2 size={15} className="text-accent" /> Select Listing to Model
         </label>
@@ -116,12 +116,12 @@ export default function SimulatorPage() {
           {strategiesQuery.data.strategies.map((strat) => (
             <article
               key={strat.key}
-              className={`card rounded-2xl p-6 flex flex-col justify-between space-y-6 ${
+              className={`card flex flex-col justify-between space-y-6 rounded-2xl p-4 sm:p-6 ${
                 strat.key === "balanced" ? "ring-1 ring-accent bg-accent/[0.02]" : ""
               }`}
             >
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="font-bold text-lg text-foreground capitalize">{strat.label || strat.key}</h3>
                   {strat.key === "balanced" && (
                     <span className="badge-healthy text-[9px] px-2 py-0.5 rounded-full font-bold">

@@ -46,7 +46,7 @@ export default function ListingsPage() {
   const listingCount = data?.listings?.length ?? 0;
 
   return (
-    <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -58,7 +58,7 @@ export default function ListingsPage() {
             Real-time status, health scores, ADR, RevPAR, and dynamic pricing controls.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <SourceBadge source="wheelhouse" />
           <span className="text-[11px] font-mono text-slate-500">
             {listingCount} Connected Listing{listingCount !== 1 ? "s" : ""}
@@ -79,14 +79,14 @@ export default function ListingsPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+        <div className="mobile-scroll-row flex w-full items-center gap-2 pb-1 sm:w-auto sm:pb-0">
           <SlidersHorizontal size={14} className="text-slate-500 flex-shrink-0" />
           <span className="text-[11px] text-slate-500 flex-shrink-0">Pricing:</span>
           {(["all", "enabled", "disabled"] as const).map((opt) => (
             <button
               key={opt}
               onClick={() => setFilterDynamic(opt)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold capitalize transition-colors ${
+              className={`shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-semibold capitalize transition-colors ${
                 filterDynamic === opt
                   ? "bg-accent/10 text-accent border border-accent/30"
                   : "bg-elevated border border-border text-slate-400 hover:bg-white/5"
@@ -118,7 +118,7 @@ export default function ListingsPage() {
       ) : (
         <div className="card rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="min-w-[880px] w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-border bg-elevated/50 font-mono text-[9px] uppercase tracking-wider text-slate-500">
                   <th className="py-3.5 px-5">Listing</th>

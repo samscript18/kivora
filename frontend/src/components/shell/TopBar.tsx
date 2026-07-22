@@ -51,7 +51,7 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
   };
 
   return (
-    <header className="dashboard-topbar sticky top-3 z-30 mx-3 mt-3 flex min-h-[68px] items-center gap-3 rounded-[22px] border border-white/[0.07] bg-[#0c0c0f]/80 px-3 shadow-[0_20px_70px_rgba(0,0,0,.32)] backdrop-blur-2xl sm:mx-5 sm:px-5">
+    <header className="dashboard-topbar sticky top-3 z-30 mx-3 mt-3 flex min-h-[68px] items-center gap-2 rounded-[22px] border border-white/[0.07] bg-[#0c0c0f]/80 px-2.5 shadow-[0_20px_70px_rgba(0,0,0,.32)] backdrop-blur-2xl sm:mx-5 sm:gap-3 sm:px-5">
       {/* Mobile menu button */}
       <button
         className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border text-slate-400 transition hover:bg-white/5 lg:hidden"
@@ -66,7 +66,7 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
         <h1 className="truncate font-display text-[15px] font-bold tracking-[-.035em] text-foreground sm:text-[17px]">
           {page.title}
         </h1>
-        <div className="mt-0.5 flex min-w-0 items-center gap-2.5">
+        <div className="mt-0.5 hidden min-w-0 items-center gap-2.5 min-[390px]:flex">
           {page.subtitle && (
             <span className="hidden truncate text-[10px] text-slate-500 lg:block">{page.subtitle}</span>
           )}
@@ -93,7 +93,7 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
         {/* Notification bell */}
         <Link
           href="/dashboard/activity"
-          className="relative grid h-10 w-10 place-items-center rounded-full border border-white/[0.08] bg-white/[0.02] text-slate-400 transition hover:border-accent/25 hover:bg-accent/[0.06] hover:text-white"
+          className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/[0.08] bg-white/[0.02] text-slate-400 transition hover:border-accent/25 hover:bg-accent/[0.06] hover:text-white"
           aria-label={`Open activity and notifications. ${criticalCount} critical incidents`}
         >
           <Bell size={15} />
@@ -110,7 +110,7 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
         <button
           type="button"
           onClick={() => void handleLogout()}
-          className="inline-flex h-10 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-3 text-[11px] font-semibold text-slate-300 transition hover:border-red-500/25 hover:bg-red-500/[0.06] hover:text-red-300"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] text-[11px] font-semibold text-slate-300 transition hover:border-red-500/25 hover:bg-red-500/[0.06] hover:text-red-300 lg:w-auto lg:px-3"
           aria-label="Log out of Kivora"
         >
           <LogOut size={14} />

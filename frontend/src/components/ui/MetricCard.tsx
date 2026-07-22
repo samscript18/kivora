@@ -23,7 +23,7 @@ export function MetricCard({ label, value, detail, icon: Icon, tone = "neutral",
   return (
     <Tag
       onClick={onClick}
-      className={`card rounded-2xl p-5 text-left transition-colors ${onClick ? "cursor-pointer hover:border-white/15" : ""}`}
+      className={`card min-w-0 rounded-2xl p-4 text-left transition-colors sm:p-5 ${onClick ? "cursor-pointer hover:border-white/15" : ""}`}
     >
       <div className="flex items-start justify-between gap-3">
         <span className="text-[11px] font-semibold leading-tight text-slate-400">{label}</span>
@@ -31,7 +31,7 @@ export function MetricCard({ label, value, detail, icon: Icon, tone = "neutral",
           <Icon size={15} />
         </span>
       </div>
-      <div className="font-display mt-3 text-[26px] font-bold tracking-tight leading-none">
+      <div className="font-display mt-3 break-words text-[22px] font-bold leading-none tracking-tight sm:text-[26px]">
         {value}
       </div>
       {detail && <div className="mt-1.5 text-[10px] text-slate-500">{detail}</div>}

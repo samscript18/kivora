@@ -30,7 +30,7 @@ export function StatusBadge({ variant, label, size = "xs" }: StatusBadgeProps) {
   const text = label ?? entry.label ?? variant;
   const sizeCls = size === "sm" ? "px-2.5 py-1 text-[10px]" : "px-2 py-0.5 text-[9px]";
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full font-bold uppercase tracking-wider ${sizeCls} ${entry.cls}`}>
+    <span className={`inline-flex max-w-full shrink-0 items-center gap-1 rounded-full font-bold uppercase tracking-wider ${sizeCls} ${entry.cls}`}>
       {text}
     </span>
   );

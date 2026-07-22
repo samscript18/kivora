@@ -40,7 +40,7 @@ export default function OpportunitiesPage() {
   const totalUpside = opportunities.reduce((acc, curr) => acc + (curr.impact || 0), 0);
 
   return (
-    <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -52,7 +52,7 @@ export default function OpportunitiesPage() {
             Identified revenue improvements derived from verified live portfolio scans.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <SourceBadge source="kivora" />
           <div className="card rounded-xl px-4 py-2 text-right">
             <div className="text-[9px] uppercase font-mono text-slate-500">Total Potential Upside</div>
@@ -114,15 +114,15 @@ export default function OpportunitiesPage() {
           {filtered.map((item) => (
             <article
               key={item.id || item.property}
-              className="card rounded-2xl p-6 flex flex-col justify-between space-y-4 hover:border-white/15 transition-colors"
+              className="card flex flex-col justify-between space-y-4 rounded-2xl p-4 transition-colors hover:border-white/15 sm:p-6"
             >
               <div className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
                     <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
                       <TrendingUp size={18} />
                     </span>
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-bold text-foreground text-sm leading-snug">{item.property}</h3>
                       <div className="flex items-center gap-2 mt-0.5">
                         {item.tag && <StatusBadge variant="opportunity" label={item.tag} />}
@@ -130,7 +130,7 @@ export default function OpportunitiesPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="ml-auto shrink-0 text-right">
                     <div className="text-base font-bold text-emerald-400">+{money(item.impact)}</div>
                     <div className="text-[9px] uppercase text-slate-500 font-mono">Estimated Upside</div>
                   </div>
@@ -147,7 +147,7 @@ export default function OpportunitiesPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex flex-col items-start justify-between gap-3 border-t border-white/5 pt-2 min-[430px]:flex-row min-[430px]:items-center">
                 <span className="text-[10px] font-mono text-slate-500">
                   Grounded in live scan
                 </span>
@@ -155,7 +155,7 @@ export default function OpportunitiesPage() {
                 {item.canPreview !== false && item.id ? (
                   <button
                     onClick={() => setSelectedId(item.id!)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-xs font-bold text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-accent/90 disabled:opacity-50 min-[430px]:w-auto"
                   >
                     <Zap size={13} />
                     Investigate & Preview

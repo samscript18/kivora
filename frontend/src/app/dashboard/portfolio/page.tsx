@@ -40,7 +40,7 @@ export default function PortfolioDashboardPage() {
   const dynamicCount = listings.filter((item) => item.metrics?.dynamicPricingEnabled).length;
 
   return (
-    <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -118,14 +118,14 @@ export default function PortfolioDashboardPage() {
             const title = item.nickname || item.title || item.id;
 
             return (
-              <article key={item.id} className="card rounded-2xl p-5 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
+              <article key={item.id} className="card space-y-4 rounded-2xl p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-white/5 text-slate-400">
                       <Building2 size={20} />
                     </span>
-                    <div>
-                      <h3 className="font-bold text-foreground text-sm">{title}</h3>
+                    <div className="min-w-0">
+                      <h3 className="truncate font-bold text-foreground text-sm">{title}</h3>
                       <p className="text-[11px] text-slate-500">
                         {item.location?.address || item.location?.city || item.channel || "Location unspecified"}
                       </p>
@@ -134,7 +134,7 @@ export default function PortfolioDashboardPage() {
                   <StatusBadge variant={isDynamic ? "healthy" : "warning"} label={isDynamic ? "DYNAMIC ON" : "REVIEW"} />
                 </div>
 
-                <div className="grid grid-cols-4 gap-2 pt-3 border-t border-white/5 text-center">
+                <div className="grid grid-cols-2 gap-3 border-t border-white/5 pt-3 text-center sm:grid-cols-4 sm:gap-2">
                   <div>
                     <div className="text-[9px] uppercase font-mono text-slate-500">Revenue</div>
                     <div className="text-xs font-bold text-foreground mt-1">{money(m?.revenue)}</div>

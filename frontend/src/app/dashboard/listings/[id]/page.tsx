@@ -90,10 +90,10 @@ export default function ListingDetailPage() {
 
   if (portfolioQuery.isLoading) {
     return (
-      <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+      <div className="dashboard-page space-y-6">
         <div className="skeleton h-8 w-48" />
         <div className="skeleton h-32 w-full rounded-2xl" />
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="skeleton h-24 rounded-2xl" />
           ))}
@@ -104,7 +104,7 @@ export default function ListingDetailPage() {
 
   if (portfolioQuery.error || !listing) {
     return (
-      <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+      <div className="dashboard-page space-y-6">
         <button
           onClick={() => router.push("/dashboard/listings")}
           className="inline-flex items-center gap-2 text-xs text-slate-400 hover:text-foreground"
@@ -125,7 +125,7 @@ export default function ListingDetailPage() {
   const title = listing.nickname || listing.title || listing.id;
 
   return (
-    <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Top Breadcrumb */}
       <button
         onClick={() => router.push("/dashboard/listings")}
@@ -135,14 +135,14 @@ export default function ListingDetailPage() {
       </button>
 
       {/* Listing Header Banner */}
-      <div className="card rounded-2xl p-6 relative overflow-hidden">
+      <div className="card relative overflow-hidden rounded-2xl p-4 sm:p-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-start gap-4">
+          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
             <div className="grid h-14 w-14 flex-shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent ring-1 ring-accent/30">
               <Building2 size={26} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge variant={isDynamic ? "healthy" : "warning"} label={isDynamic ? "DYNAMIC ON" : "REVIEW NEEDED"} />
                 <SourceBadge source="wheelhouse" />
                 <span className="text-[10px] font-mono text-slate-500">ID: {listing.id}</span>
@@ -160,7 +160,7 @@ export default function ListingDetailPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setActiveTab("simulator")}
-              className="flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-xs font-bold text-white hover:bg-accent/90 transition-colors"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-xs font-bold text-white transition-colors hover:bg-accent/90 md:w-auto"
             >
               <Zap size={14} /> Simulate Strategy
             </button>
@@ -202,7 +202,7 @@ export default function ListingDetailPage() {
       {workspaceQuery.data&&<section className="card rounded-2xl p-5"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Info label="Portfolio" value={workspaceQuery.data.listing.portfolio?.name||"Unassigned"}/><Info label="Connection" value={`${workspaceQuery.data.listing.connection?.displayName||"Unknown"} · ${workspaceQuery.data.listing.connection?.status||"unknown"}`}/><Info label="Last synchronized" value={workspaceQuery.data.listing.lastSynchronizedAt?new Date(workspaceQuery.data.listing.lastSynchronizedAt).toLocaleString():"Not recorded"}/><Info label="Property profiles" value={(workspaceQuery.data.listing.propertyProfiles||[]).join(", ")||"Not configured"}/></div></section>}
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-border gap-6 text-xs font-semibold">
+      <div className="mobile-scroll-row flex gap-6 border-b border-border text-xs font-semibold">
         {[
           { id: "audit", label: "Audit & Diagnostics", icon: Bot },
           { id: "simulator", label: "Strategy Simulator", icon: Zap },
@@ -215,7 +215,7 @@ export default function ListingDetailPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${
+              className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${
                 isActive
                   ? "border-accent text-accent"
                   : "border-transparent text-slate-400 hover:text-foreground"
@@ -419,7 +419,7 @@ export default function ListingDetailPage() {
   );
 }
 
-function Info({label,value}:{label:string;value:string}){return <div className="rounded-xl border border-border bg-elevated p-3"><div className="text-[9px] uppercase text-slate-500">{label}</div><div className="mt-1 text-xs font-semibold">{value}</div></div>}
+function Info({label,value}:{label:string;value:string}){return <div className="min-w-0 rounded-xl border border-border bg-elevated p-3"><div className="text-[9px] uppercase text-slate-500">{label}</div><div className="mt-1 break-words text-xs font-semibold">{value}</div></div>}
 function OperationalList({title,empty,items,open}:{title:string;empty:string;items:any[];open:(v:any)=>void}){return <section className="card rounded-2xl p-5"><h3 className="text-sm font-bold">{title}</h3>{items.length?<div className="mt-3 space-y-2">{items.map(item=><button key={item.id||item._id} onClick={()=>open(item)} className="w-full rounded-xl border border-border bg-elevated p-3 text-left"><div className="text-xs font-semibold">{item.title||String(item.type).replaceAll("_"," ")}</div><div className="mt-1 text-[10px] text-slate-500">{item.status} · {item.confidence||0}% confidence · Open evidence and decision workspace</div></button>)}</div>:<p className="mt-3 text-xs text-slate-500">{empty}</p>}</section>}
 function StatusList({title,empty,items}:{title:string;empty:string;items:any[]}){return <section className="card rounded-2xl p-5"><h3 className="text-sm font-bold">{title}</h3>{items.length?<div className="mt-3 max-h-80 space-y-2 overflow-auto">{items.slice(0,30).map((item,index)=><div key={item.id||item._id||index} className="rounded-xl border border-border bg-elevated p-3"><div className="flex items-start gap-2"><span className="min-w-0 flex-1 text-xs font-semibold">{item.title||item.actionType||item.type||item.action||"Recorded item"}</span><span className="text-[9px] font-bold uppercase text-slate-500">{item.status||item.deliveryStatus||"recorded"}</span></div><p className="mt-1 text-[10px] text-slate-500">{statusDetail(item)}</p>{(item.createdAt||item.calculatedAt)&&<p className="mt-1 text-[9px] text-slate-600">{new Date(item.createdAt||item.calculatedAt).toLocaleString()}</p>}</div>)}</div>:<p className="mt-3 text-xs text-slate-500">{empty}</p>}</section>}
 function statusDetail(item:any){if(item.message)return item.message;if(item.errorDetails?.reason)return item.errorDetails.reason;if(item.verificationResult?.matched===true)return"Wheelhouse state verified";if(item.verificationResult?.matched===false)return"Verification did not match";return"Stored in the organization activity history";}

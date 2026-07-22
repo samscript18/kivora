@@ -69,7 +69,7 @@ function PriorityCard({
       initial={{ x: -8 }}
       animate={{ x: 0 }}
       transition={{ delay: rank * 0.05 }}
-      className="group flex items-start gap-4 border-b border-white/6 p-4 last:border-b-0 hover:bg-white/[0.02] transition-colors"
+      className="group grid grid-cols-[auto_1fr_auto] items-start gap-2 border-b border-white/6 p-3 transition-colors last:border-b-0 hover:bg-white/[0.02] sm:flex sm:gap-4 sm:p-4"
     >
       {/* Rank */}
       <span className="mt-0.5 font-mono text-xs font-bold text-slate-600 tabular-nums w-5 flex-shrink-0">
@@ -77,14 +77,14 @@ function PriorityCard({
       </span>
 
       {/* Badge */}
-      <div className="mt-0.5 flex-shrink-0">
+      <div className="mt-0.5 hidden flex-shrink-0 sm:block">
         <StatusBadge variant={severity} />
       </div>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-semibold text-foreground">{priority.title}</div>
-        <div className="mt-0.5 truncate text-[10px] text-slate-500">
+        <div className="break-words text-[13px] font-semibold text-foreground sm:truncate">{priority.title}</div>
+        <div className="mt-0.5 break-words text-[10px] text-slate-500 sm:truncate">
           {priority.property}
           {priority.action ? ` · ${priority.action}` : ""}
         </div>
@@ -101,7 +101,7 @@ function PriorityCard({
       {/* Action */}
       <button
         onClick={onInvestigate}
-        className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/5 hover:text-foreground transition-all"
+        className="col-span-3 flex w-full flex-shrink-0 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-400 transition-all hover:bg-white/5 hover:text-foreground sm:col-span-1 sm:w-auto sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
         aria-label={`Investigate ${priority.title}`}
       >
         Investigate <ArrowRight size={12} />
@@ -208,13 +208,13 @@ function IncidentDrawer({
               </p>
 
               {/* Financial impact grid */}
-              <div className="mt-6 grid grid-cols-3 overflow-hidden rounded-xl border border-border">
+              <div className="mt-6 grid overflow-hidden rounded-xl border border-border min-[390px]:grid-cols-3">
                 {[
                   { label: "Current rate", value: money(incident.currentRate), cls: "text-red-400" },
                   { label: "Recommended", value: money(incident.recommendedRate), cls: "text-emerald-400" },
                   { label: "At risk",      value: money(incident.revenueAtRisk),  cls: "text-amber-400" },
                 ].map(({ label, value, cls }, i) => (
-                  <div key={label} className={`p-4 ${i > 0 ? "border-l border-border" : ""}`}>
+                  <div key={label} className={`p-4 ${i > 0 ? "border-t border-border min-[390px]:border-l min-[390px]:border-t-0" : ""}`}>
                     <div className="text-[8px] font-bold uppercase tracking-wider text-slate-500">{label}</div>
                     <div className={`mt-2 text-lg font-bold ${cls}`}>{value}</div>
                   </div>
@@ -314,7 +314,7 @@ function IncidentDrawer({
                           <Sparkles size={13} /> Live preview complete — no pricing changed
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 divide-x divide-emerald-500/15 text-center">
+                      <div className="grid divide-y divide-emerald-500/15 text-center min-[390px]:grid-cols-3 min-[390px]:divide-x min-[390px]:divide-y-0">
                         {[
                           ["Recovery", `+${money(previewResult.projectedRecovery)}`, "text-emerald-400"],
                           ["Current",   money(previewResult.currentRevenue),        "text-foreground"],
@@ -378,13 +378,13 @@ function IncidentDrawer({
 function PortfolioPulse({ trend }: { trend: { day: string; revenue: number; market?: number }[] }) {
   if (!trend?.length) return null;
   return (
-    <section className="card rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-5">
+    <section className="card rounded-2xl p-4 sm:p-5">
+      <div className="mb-5 flex flex-col items-start justify-between gap-3 min-[460px]:flex-row min-[460px]:items-center">
         <div>
           <h3 className="font-display text-[14px] font-bold text-foreground">Portfolio revenue trend</h3>
           <p className="mt-0.5 text-[10px] text-slate-500">Live portfolio vs market benchmark · last {trend.length} days</p>
         </div>
-        <div className="flex items-center gap-4 text-[9px] text-slate-500">
+        <div className="flex flex-wrap items-center gap-3 text-[9px] text-slate-500 sm:gap-4">
           <span className="flex items-center gap-1.5"><span className="h-2 w-4 rounded bg-accent/60" /> Portfolio</span>
           <span className="flex items-center gap-1.5"><span className="h-2 w-4 rounded border border-slate-600 border-dashed bg-transparent" /> Market</span>
         </div>
@@ -543,7 +543,7 @@ export default function WarRoomPage() {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-[1440px] p-4 sm:p-7">
+      <div className="dashboard-page">
         <ErrorState
           error={error}
           heading="Could not load live portfolio data"
@@ -557,9 +557,9 @@ export default function WarRoomPage() {
 
   return (
     <>
-      <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+      <div className="dashboard-page space-y-6">
         {/* Page header */}
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
           <div>
             <div className="text-[11px] text-slate-500">{today}</div>
             <h2 className="font-display mt-1 text-2xl font-bold tracking-tight sm:text-[28px]">
@@ -575,7 +575,7 @@ export default function WarRoomPage() {
               </p>
             )}
           </div>
-          <div className="flex-shrink-0 flex items-center gap-2">
+          <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
             <SourceBadge source="wheelhouse" />
             {data && <SourceBadge source="kivora" />}
           </div>
@@ -599,12 +599,12 @@ export default function WarRoomPage() {
 
         {/* Today's priority queue */}
         <section className="card overflow-hidden rounded-2xl">
-          <div className="flex items-center justify-between border-b border-border p-5">
+          <div className="flex flex-col items-start justify-between gap-3 border-b border-border p-4 min-[430px]:flex-row min-[430px]:items-center sm:p-5">
             <div>
               <div className="eyebrow">Revenue War Room</div>
               <h3 className="font-display mt-1 text-lg font-bold text-foreground">Today&apos;s highest-impact actions</h3>
             </div>
-            <span className="rounded-full border border-border px-3 py-1 font-mono text-[9px] text-slate-500">
+            <span className="shrink-0 rounded-full border border-border px-3 py-1 font-mono text-[9px] text-slate-500">
               LIVE PRIORITY QUEUE
             </span>
           </div>
@@ -674,7 +674,7 @@ export default function WarRoomPage() {
         {/* Signals teaser */}
         {data?.signals?.length ? (
           <section className="card rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex flex-col items-start justify-between gap-2 min-[430px]:flex-row min-[430px]:items-center">
               <div>
                 <h3 className="font-display text-[14px] font-bold text-foreground">Market signals</h3>
                 <p className="mt-0.5 text-[10px] text-slate-500">Events and weather affecting your portfolio locations</p>

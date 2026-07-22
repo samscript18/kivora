@@ -66,7 +66,7 @@ export default function ReportsPage() {
   const listings = portfolioQuery.data?.listings ?? [];
 
   return (
-    <div className="mx-auto max-w-[1440px] p-4 sm:p-7 space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -82,10 +82,10 @@ export default function ReportsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border gap-6 text-xs font-semibold">
+      <div className="mobile-scroll-row flex gap-6 border-b border-border text-xs font-semibold">
         <button
           onClick={() => setActiveTab("reports")}
-          className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${
+          className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${
             activeTab === "reports" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"
           }`}
         >
@@ -93,7 +93,7 @@ export default function ReportsPage() {
         </button>
         <button
           onClick={() => setActiveTab("briefs")}
-          className={`flex items-center gap-2 py-3 border-b-2 transition-colors ${
+          className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${
             activeTab === "briefs" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"
           }`}
         >
@@ -105,7 +105,7 @@ export default function ReportsPage() {
       {activeTab === "reports" && (
         <div className="space-y-6">
           {/* Generator Card */}
-          <div className="card rounded-2xl p-6 space-y-4">
+          <div className="card space-y-4 rounded-2xl p-4 sm:p-6">
             <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
               <Plus size={16} className="text-accent" /> Generate New Report
             </h3>
@@ -176,7 +176,7 @@ export default function ReportsPage() {
               {reports.map((item) => (
                 <article key={item._id} className="card overflow-hidden rounded-2xl">
                   <div className="h-1 bg-gradient-to-r from-accent via-orange-400/70 to-transparent" />
-                  <div className="space-y-5 p-6">
+                  <div className="space-y-5 p-4 sm:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div><div className="font-mono text-[9px] uppercase tracking-[0.16em] text-accent">{item.type} report</div><h3 className="mt-1 font-semibold tracking-tight text-foreground">{item.title}</h3></div>
                     <span className="font-mono text-[9px] uppercase px-2 py-0.5 rounded bg-white/5 text-slate-400">
@@ -211,9 +211,9 @@ export default function ReportsPage() {
           ) : (
             <div className="grid gap-4">
               {briefs.map((item) => (
-                <article key={item._id} className="card rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
+                <article key={item._id} className="card space-y-4 rounded-2xl p-4 sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <span className="text-[10px] uppercase font-mono text-slate-500">{item.owner || "Owner Communication"}</span>
                       <h3 className="font-bold text-foreground text-sm mt-0.5">{item.subject}</h3>
                     </div>
@@ -228,7 +228,7 @@ export default function ReportsPage() {
                     {item.body}
                   </p>
 
-                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/5">
+                  <div className="flex flex-col items-stretch justify-end gap-2 border-t border-white/5 pt-3 min-[430px]:flex-row min-[430px]:items-center">
                     <button
                       onClick={() => {
                         navigator.clipboard?.writeText(item.body);

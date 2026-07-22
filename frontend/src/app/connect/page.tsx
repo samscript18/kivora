@@ -45,7 +45,7 @@ function ConnectFlow() {
       });
   }, [ready, authenticated, intent, signature, router]);
   return (
-    <div className="glass-card w-full max-w-md rounded-3xl p-8 text-center">
+    <div className="glass-card w-full max-w-md rounded-3xl p-5 text-center sm:p-8">
       <div
         className={`mx-auto grid h-12 w-12 place-items-center rounded-2xl border ${displayState === "done" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-[#FF1301]/30 bg-[#FF1301]/10 text-accent"}`}
       >
@@ -54,7 +54,7 @@ function ConnectFlow() {
       <div className="mt-5 font-mono text-[10px] uppercase tracking-[.2em] text-accent">
         Mobile companion
       </div>
-      <h1 className="mt-3 font-display text-3xl font-black">
+      <h1 className="mt-3 font-display text-2xl font-black sm:text-3xl">
         {displayState === "done"
           ? "Connection complete."
           : displayState === "linking"
@@ -75,7 +75,7 @@ function ConnectFlow() {
 }
 function Missing() {
   return (
-    <div className="glass-card max-w-md rounded-3xl p-8 text-center">
+    <div className="glass-card max-w-md rounded-3xl p-5 text-center sm:p-8">
       <h1 className="font-display text-2xl font-black">
         Sign-in configuration required
       </h1>
@@ -87,7 +87,7 @@ function Missing() {
 }
 export default function ConnectPage() {
   return (
-    <main className="grid min-h-screen place-items-center bg-[#030303] p-5">
+    <main className="grid min-h-[100dvh] place-items-center bg-[#030303] p-3 sm:p-5">
       <Suspense
         fallback={
           <div className="font-mono text-xs text-slate-500">

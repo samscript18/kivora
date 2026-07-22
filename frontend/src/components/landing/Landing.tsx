@@ -105,12 +105,12 @@ function Navbar() {
   }, []);
   return (
     <>
-      <header className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-4 md:pt-6">
+      <header className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center px-3 pt-3 sm:px-4 sm:pt-4 md:pt-6">
         <motion.nav
           initial={{ y: -40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.7, ease }}
-          className={`pointer-events-auto flex w-full max-w-6xl items-center justify-between rounded-full border px-4 py-2.5 backdrop-blur-2xl transition-all duration-500 ${scrolled ? "border-white/10 bg-[#09090b]/85 shadow-[0_20px_70px_rgba(0,0,0,.45)]" : "border-white/[.07] bg-white/[.025]"}`}
+          className={`pointer-events-auto flex w-full max-w-6xl items-center justify-between rounded-full border px-3 py-2 backdrop-blur-2xl transition-all duration-500 sm:px-4 sm:py-2.5 ${scrolled ? "border-white/10 bg-[#09090b]/85 shadow-[0_20px_70px_rgba(0,0,0,.45)]" : "border-white/[.07] bg-white/[.025]"}`}
         >
           <Link href="#top" className="flex items-center gap-2.5 pl-1">
             <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-xl bg-white text-black">
@@ -154,7 +154,7 @@ function Navbar() {
             initial={{ opacity: 0, y: -18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -18, scale: 0.98 }}
-            className="fixed left-4 right-4 top-[76px] z-40 rounded-[24px] border border-white/10 bg-[#0c0c0f]/95 p-3 shadow-2xl backdrop-blur-2xl"
+            className="fixed left-3 right-3 top-[68px] z-40 max-h-[calc(100dvh-5rem)] overflow-y-auto rounded-[24px] border border-white/10 bg-[#0c0c0f]/95 p-3 shadow-2xl backdrop-blur-2xl sm:left-4 sm:right-4 sm:top-[76px]"
           >
             {nav.map((item) => (
               <Link
@@ -225,27 +225,27 @@ function HeroConsole() {
       initial={{ opacity: 0, y: 60, rotateX: 8 }}
       animate={{ opacity: 1, y: 0, rotateX: 0 }}
       transition={{ delay: 0.75, duration: 1.1, ease }}
-      className="relative mx-auto mt-16 w-full max-w-5xl [perspective:1200px]"
+      className="relative mx-auto mt-12 w-full max-w-5xl [perspective:1200px] sm:mt-16"
     >
-      <div className="absolute -inset-12 bg-[radial-gradient(circle,rgba(255,19,1,.16),transparent_65%)] blur-2xl" />
-      <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#0d0d10]/90 shadow-[0_50px_140px_rgba(0,0,0,.8)] backdrop-blur-xl">
-        <div className="flex items-center border-b border-white/[.07] px-5 py-4">
+      <div className="absolute -inset-4 bg-[radial-gradient(circle,rgba(255,19,1,.16),transparent_65%)] blur-2xl sm:-inset-12" />
+      <div className="relative overflow-hidden rounded-[22px] border border-white/10 bg-[#0d0d10]/90 shadow-[0_50px_140px_rgba(0,0,0,.8)] backdrop-blur-xl sm:rounded-[28px]">
+        <div className="flex items-center border-b border-white/[.07] px-4 py-3 sm:px-5 sm:py-4">
           <div className="flex gap-1.5">
             <span className="h-2 w-2 rounded-full bg-accent" />
             <span className="h-2 w-2 rounded-full bg-amber-400" />
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
           </div>
-          <div className="mx-auto font-mono text-[9px] uppercase tracking-[.22em] text-white/25">
+          <div className="mx-auto hidden font-mono text-[9px] uppercase tracking-[.22em] text-white/25 sm:block">
             Product interface preview
           </div>
-          <div className="flex items-center gap-2 font-mono text-[8px] uppercase tracking-wider text-emerald-400">
+          <div className="ml-auto flex items-center gap-2 font-mono text-[8px] uppercase tracking-wider text-emerald-400 sm:ml-0">
             <span className="live-dot h-1.5 w-1.5 rounded-full bg-emerald-400" />{" "}
             Always on
           </div>
         </div>
         <div className="grid lg:grid-cols-[1.1fr_.9fr]">
           <div className="border-b border-white/[.07] p-5 sm:p-7 lg:border-b-0 lg:border-r">
-            <div className="flex items-end justify-between">
+            <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <p className="font-mono text-[9px] uppercase tracking-[.2em] text-white/30">
                   Portfolio health
@@ -280,7 +280,7 @@ function HeroConsole() {
                 />
               ))}
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
               {[
                 ["Revenue", "$184.2k"],
                 ["At risk", "$7.1k"],
@@ -288,12 +288,12 @@ function HeroConsole() {
               ].map(([label, value]) => (
                 <div
                   key={label}
-                  className="rounded-xl border border-white/[.06] bg-white/[.025] p-3"
+                  className="min-w-0 rounded-xl border border-white/[.06] bg-white/[.025] p-2.5 sm:p-3"
                 >
                   <div className="font-mono text-[8px] uppercase text-white/25">
                     {label}
                   </div>
-                  <div className="mt-1.5 text-sm font-bold">{value}</div>
+                  <div className="mt-1.5 break-words text-xs font-bold sm:text-sm">{value}</div>
                 </div>
               ))}
             </div>
@@ -358,7 +358,7 @@ function Hero() {
     <section
       id="top"
       ref={ref}
-      className="relative min-h-[120vh] overflow-hidden pt-40"
+      className="relative overflow-hidden pb-20 pt-32 sm:min-h-[120vh] sm:pb-0 sm:pt-40"
     >
       <Glow />
       <div className="hero-orb absolute left-[8%] top-24 h-44 w-44 rounded-full border border-accent/20" />
@@ -372,12 +372,12 @@ function Hero() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="mx-auto flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[.035] px-4 py-2 font-mono text-[9px] uppercase tracking-[.22em] text-white/45"
+          className="mx-auto flex max-w-full w-fit items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[.035] px-3 py-2 text-center font-mono text-[8px] uppercase tracking-[.16em] text-white/45 sm:px-4 sm:text-[9px] sm:tracking-[.22em]"
         >
           <Sparkles size={12} className="text-amber-300" /> Intelligence for
           every revenue decision
         </motion.div>
-        <h1 className="mx-auto mt-8 max-w-6xl font-display text-[clamp(4.2rem,11vw,9.5rem)] font-semibold leading-[.82] tracking-[-.085em]">
+        <h1 className="mx-auto mt-7 max-w-6xl font-display text-[clamp(3rem,13vw,9.5rem)] font-semibold leading-[.86] tracking-[-.07em] sm:mt-8 sm:leading-[.82] sm:tracking-[-.085em]">
           <motion.span
             initial={{ opacity: 0, y: 70 }}
             animate={{ opacity: 1, y: 0 }}
@@ -399,7 +399,7 @@ function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="mx-auto mt-8 max-w-2xl text-base leading-8 text-white/45 sm:text-lg"
+          className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-white/45 sm:mt-8 sm:text-lg sm:leading-8"
         >
           Kivora turns a noisy rental portfolio into one calm, ranked operating
           system—showing your team what changed, what it costs, and what to do
@@ -411,10 +411,10 @@ function Hero() {
           transition={{ delay: 0.65 }}
           className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row"
         >
-          <Launch className="flex items-center gap-2 rounded-full bg-white px-8 py-4 text-sm font-extrabold text-black shadow-[0_18px_55px_rgba(255,255,255,.12)] transition hover:scale-[1.03]" />
+          <Launch className="flex w-full max-w-xs items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-sm font-extrabold text-black shadow-[0_18px_55px_rgba(255,255,255,.12)] transition hover:scale-[1.03] sm:w-auto" />
           <Link
             href="#platform"
-            className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[.035] px-8 py-4 text-sm font-bold text-white/65 transition hover:bg-white/[.08] hover:text-white"
+            className="flex w-full max-w-xs items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[.035] px-8 py-4 text-sm font-bold text-white/65 transition hover:bg-white/[.08] hover:text-white sm:w-auto"
           >
             Explore the platform <ArrowRight size={15} />
           </Link>
@@ -453,8 +453,8 @@ function SignalRail() {
 
 function Problem() {
   return (
-    <section className="relative py-32 sm:py-40">
-      <div className="mx-auto grid max-w-7xl gap-16 px-4 lg:grid-cols-[.8fr_1.2fr]">
+    <section className="relative py-20 sm:py-40">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:gap-16 lg:grid-cols-[.8fr_1.2fr]">
         <motion.div
           variants={reveal}
           initial="hidden"
@@ -490,10 +490,10 @@ function Problem() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.12 }}
-              className="bg-[#0a0a0c] p-7 sm:p-9"
+              className="bg-[#0a0a0c] p-5 sm:p-9"
             >
               <div className="font-mono text-[10px] text-accent">{time}</div>
-              <p className="mt-8 text-lg leading-8 text-white/60">{text}</p>
+              <p className="mt-5 text-base leading-7 text-white/60 sm:mt-8 sm:text-lg sm:leading-8">{text}</p>
             </motion.article>
           ))}
         </div>
@@ -539,7 +539,7 @@ function Platform() {
   return (
     <section
       id="platform"
-      className="relative overflow-hidden border-y border-white/[.06] bg-[#0d0d10] py-32"
+      className="relative overflow-hidden border-y border-white/[.06] bg-[#0d0d10] py-20 sm:py-32"
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_30%,rgba(255,19,1,.09),transparent_35%),radial-gradient(circle_at_85%_70%,rgba(234,179,8,.06),transparent_30%)]" />
       <div className="relative mx-auto max-w-7xl px-4">
@@ -559,7 +559,7 @@ function Platform() {
             turns portfolio movement into decisions.
           </p>
         </motion.div>
-        <div className="mt-16 grid gap-4 md:grid-cols-3">
+        <div className="mt-10 grid gap-4 sm:mt-16 md:grid-cols-3">
           {features.map(({ icon: Icon, title, text, className }, index) => (
             <motion.article
               key={title}
@@ -568,13 +568,13 @@ function Platform() {
               viewport={{ once: true, margin: "-50px" }}
               transition={{ delay: index * 0.07, duration: 0.7, ease }}
               whileHover={{ y: -6 }}
-              className={`feature-card group relative min-h-[310px] overflow-hidden rounded-[28px] border border-white/[.08] bg-white/[.025] p-7 ${className}`}
+              className={`feature-card group relative min-h-[260px] overflow-hidden rounded-[24px] border border-white/[.08] bg-white/[.025] p-5 sm:min-h-[310px] sm:rounded-[28px] sm:p-7 ${className}`}
             >
               <div className="absolute right-[-35px] top-[-35px] h-40 w-40 rounded-full bg-accent/[.04] blur-2xl transition group-hover:bg-accent/[.1]" />
               <span className="grid h-11 w-11 place-items-center rounded-2xl border border-white/10 bg-white/[.04] text-accent">
                 <Icon size={20} />
               </span>
-              <div className="absolute bottom-7 left-7 right-7">
+              <div className="absolute bottom-5 left-5 right-5 sm:bottom-7 sm:left-7 sm:right-7">
                 <div className="font-mono text-[9px] uppercase tracking-[.18em] text-white/20">
                   0{index + 1}
                 </div>
@@ -618,8 +618,8 @@ function Intelligence() {
     },
   ];
   return (
-    <section id="intelligence" className="relative py-32 sm:py-40">
-      <div className="mx-auto grid max-w-7xl items-center gap-16 px-4 lg:grid-cols-2">
+    <section id="intelligence" className="relative py-20 sm:py-40">
+      <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:gap-16 lg:grid-cols-2">
         <motion.div
           initial={{ opacity: 0, x: -40 }}
           whileInView={{ opacity: 1, x: 0 }}
@@ -638,16 +638,16 @@ function Intelligence() {
                 VERIFIED
               </span>
             </div>
-            <div className="mt-8 rounded-[24px] border border-accent/20 bg-accent/[.045] p-6">
-              <div className="flex items-start gap-4">
+            <div className="mt-6 rounded-[20px] border border-accent/20 bg-accent/[.045] p-4 sm:mt-8 sm:rounded-[24px] sm:p-6">
+              <div className="flex items-start gap-3 sm:gap-4">
                 <span className="grid h-11 w-11 place-items-center rounded-2xl bg-accent/10 text-accent">
                   <Zap size={20} />
                 </span>
-                <div>
+                <div className="min-w-0">
                   <div className="font-mono text-[9px] uppercase tracking-wider text-accent">
                     Priority #1
                   </div>
-                  <h3 className="mt-2 font-display text-2xl font-semibold">
+                  <h3 className="mt-2 font-display text-xl font-semibold sm:text-2xl">
                     Restore dynamic pricing
                   </h3>
                   <p className="mt-2 text-xs leading-6 text-white/35">
@@ -661,12 +661,12 @@ function Intelligence() {
               {rows.map(({ icon: Icon, name, value, note, tone }) => (
                 <div
                   key={name}
-                  className="flex items-center gap-4 rounded-2xl border border-white/[.07] bg-white/[.025] p-4"
+                  className="flex min-w-0 items-center gap-3 rounded-2xl border border-white/[.07] bg-white/[.025] p-3 sm:gap-4 sm:p-4"
                 >
                   <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/[.04]">
                     <Icon size={16} className={tone} />
                   </span>
-                  <span className="flex-1">
+                  <span className="min-w-0 flex-1">
                     <b className="block text-xs">{name}</b>
                     <small className="text-[9px] text-white/25">{note}</small>
                   </span>
@@ -676,7 +676,7 @@ function Intelligence() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="mt-4 grid gap-3 min-[390px]:grid-cols-2">
               <button className="rounded-2xl border border-white/10 py-3 text-xs font-bold text-white/50">
                 Review evidence
               </button>
@@ -756,7 +756,7 @@ function Workflow() {
   return (
     <section
       id="workflow"
-      className="relative overflow-hidden border-y border-white/[.06] bg-[#0d0d10] py-32"
+      className="relative overflow-hidden border-y border-white/[.06] bg-[#0d0d10] py-20 sm:py-32"
     >
       <div className="absolute left-1/2 top-0 h-px w-1/2 -translate-x-1/2 bg-gradient-to-r from-transparent via-accent to-transparent" />
       <div className="mx-auto max-w-7xl px-4">
@@ -772,7 +772,7 @@ function Workflow() {
             From invisible problem to verified action.
           </h2>
         </motion.div>
-        <div className="relative mt-20 grid gap-4 lg:grid-cols-5">
+        <div className="relative mt-12 grid gap-4 sm:mt-20 lg:grid-cols-5">
           <div className="absolute left-[10%] right-[10%] top-8 hidden h-px bg-gradient-to-r from-transparent via-white/15 to-transparent lg:block" />
           {steps.map((step, index) => (
             <motion.article
@@ -781,7 +781,7 @@ function Workflow() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.12 }}
-              className="relative rounded-[24px] border border-white/[.07] bg-[#101014] p-6 lg:border-0 lg:bg-transparent lg:p-4"
+              className="relative rounded-[24px] border border-white/[.07] bg-[#101014] p-5 sm:p-6 lg:border-0 lg:bg-transparent lg:p-4"
             >
               <span className="relative z-10 grid h-16 w-16 place-items-center rounded-full border border-white/10 bg-[#0d0d10] font-mono text-[10px] text-accent shadow-[0_0_0_8px_#0d0d10]">
                 {step.number}
@@ -802,9 +802,9 @@ function Workflow() {
 
 function MobileCompanion() {
   return (
-    <section className="relative overflow-hidden py-32 sm:py-40">
+    <section className="relative overflow-hidden py-20 sm:py-40">
       <div className="absolute right-0 top-1/2 h-[500px] w-[500px] -translate-y-1/2 rounded-full bg-amber-300/[.05] blur-[130px]" />
-      <div className="relative mx-auto grid max-w-7xl items-center gap-16 px-4 lg:grid-cols-[1fr_.8fr]">
+      <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 sm:gap-16 lg:grid-cols-[1fr_.8fr]">
         <motion.div
           variants={reveal}
           initial="hidden"
@@ -844,8 +844,8 @@ function MobileCompanion() {
           className="relative mx-auto w-full max-w-[370px]"
         >
           <div className="absolute -inset-16 bg-[radial-gradient(circle,rgba(234,179,8,.13),transparent_62%)] blur-xl" />
-          <div className="relative rounded-[42px] border border-white/15 bg-[#111116] p-3 shadow-[0_45px_120px_rgba(0,0,0,.75)]">
-            <div className="overflow-hidden rounded-[32px] bg-[#08080a]">
+          <div className="relative rounded-[32px] border border-white/15 bg-[#111116] p-2 shadow-[0_45px_120px_rgba(0,0,0,.75)] sm:rounded-[42px] sm:p-3">
+            <div className="overflow-hidden rounded-[25px] bg-[#08080a] sm:rounded-[32px]">
               <div className="flex items-center border-b border-white/[.07] p-5">
                 <span className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-accent to-amber-400">
                   <Bot size={17} />
@@ -898,7 +898,7 @@ function Security() {
   return (
     <section
       id="security"
-      className="border-y border-white/[.06] bg-[#0d0d10] py-32"
+      className="border-y border-white/[.06] bg-[#0d0d10] py-20 sm:py-32"
     >
       <div className="mx-auto max-w-7xl px-4">
         <div className="grid gap-12 lg:grid-cols-2">
@@ -993,8 +993,8 @@ const questions = [
 function FAQ() {
   const [active, setActive] = useState<number | null>(0);
   return (
-    <section className="py-32 sm:py-40">
-      <div className="mx-auto grid max-w-7xl gap-16 px-4 lg:grid-cols-[.7fr_1.3fr]">
+    <section className="py-20 sm:py-40">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:gap-16 lg:grid-cols-[.7fr_1.3fr]">
         <div>
           <p className="eyebrow">Questions, answered</p>
           <h2 className="mt-5 font-display text-4xl font-semibold tracking-[-.06em] sm:text-6xl">
@@ -1006,14 +1006,14 @@ function FAQ() {
             <div key={question} className="border-b border-white/[.08]">
               <button
                 onClick={() => setActive(active === index ? null : index)}
-                className="flex w-full items-center py-6 text-left"
+                className="flex w-full items-center gap-4 py-5 text-left sm:py-6"
               >
                 <span className="font-display text-lg font-semibold sm:text-xl">
                   {question}
                 </span>
                 <motion.span
                   animate={{ rotate: active === index ? 180 : 0 }}
-                  className="ml-auto"
+                  className="ml-auto shrink-0"
                 >
                   <ChevronDown size={18} className="text-white/30" />
                 </motion.span>
@@ -1044,7 +1044,7 @@ function FinalCTA() {
   return (
     <footer className="relative overflow-hidden border-t border-white/[.06]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,19,1,.25),transparent_45%)]" />
-      <div className="relative mx-auto max-w-7xl px-4 py-32 text-center sm:py-44">
+      <div className="relative mx-auto max-w-7xl px-4 py-24 text-center sm:py-44">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           whileInView={{ opacity: 1, scale: 1 }}
@@ -1052,7 +1052,7 @@ function FinalCTA() {
           transition={{ duration: 0.9, ease }}
         >
           <p className="eyebrow">Your next best move is waiting</p>
-          <h2 className="mx-auto mt-6 max-w-6xl font-display text-[clamp(3.6rem,9vw,8.5rem)] font-semibold leading-[.84] tracking-[-.085em]">
+          <h2 className="mx-auto mt-6 max-w-6xl font-display text-[clamp(3rem,11vw,8.5rem)] font-semibold leading-[.88] tracking-[-.07em] sm:leading-[.84] sm:tracking-[-.085em]">
             Run revenue.
             <br />
             <span className="text-gradient">Not reports.</span>
@@ -1061,7 +1061,7 @@ function FinalCTA() {
             Turn every signal into a clear priority, every priority into a
             confident action, and every action into a result you can prove.
           </p>
-          <Launch className="mx-auto mt-10 flex items-center gap-2 rounded-full bg-white px-9 py-4 text-sm font-extrabold text-black transition hover:scale-[1.04]" />
+          <Launch className="mx-auto mt-10 flex w-full max-w-xs items-center justify-center gap-2 rounded-full bg-white px-9 py-4 text-sm font-extrabold text-black transition hover:scale-[1.04] sm:w-auto" />
         </motion.div>
       </div>
       <div className="relative border-t border-white/[.06] px-4 py-6">

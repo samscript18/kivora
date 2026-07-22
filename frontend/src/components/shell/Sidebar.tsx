@@ -92,7 +92,7 @@ export function Sidebar({ mobile, onClose }: SidebarProps) {
     <aside
       className={`${
         mobile
-          ? "fixed inset-y-0 left-0 z-50 shadow-2xl"
+          ? "fixed bottom-2 left-2 top-2 z-50 rounded-[24px] shadow-2xl"
           : "desktop-only fixed inset-y-5 left-5 rounded-[28px] shadow-2xl"
       } z-40 flex w-[264px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden border border-white/[0.07] bg-[#0c0c0f]/88 shadow-[0_30px_100px_rgba(0,0,0,.5)] backdrop-blur-2xl`}
       aria-label="Primary navigation"
