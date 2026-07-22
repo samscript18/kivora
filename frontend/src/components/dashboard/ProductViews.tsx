@@ -394,8 +394,10 @@ function MarketIntelligence() {
   });
   const refresh = useMutation({
     mutationFn: refreshMarketIntelligence,
-    onSuccess: () => {
-      toast.success("Live market signals refreshed");
+    onSuccess: (result) => {
+      const description = `${result.events} event${result.events === 1 ? "" : "s"} and ${result.weather} weather forecast${result.weather === 1 ? "" : "s"} refreshed across ${result.clusters} portfolio location${result.clusters === 1 ? "" : "s"}.`;
+      if (result.errors.length) toast.warning("Some live signals need attention", { description: `${description} ${result.errors.map((item) => `${item.provider}: ${item.message}`).join(" · ")}` });
+      else toast.success("Live market signals refreshed", { description });
       query.refetch();
     },
     onError: (error) =>

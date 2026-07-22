@@ -19,6 +19,7 @@ import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { toast } from "sonner";
 import type { Report, OwnerBrief, ReportType } from "@/types/api";
+import { RichText } from "@/components/ui/RichText";
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<"reports" | "briefs">("reports");
@@ -173,20 +174,18 @@ export default function ReportsPage() {
           ) : (
             <div className="grid gap-4">
               {reports.map((item) => (
-                <article key={item._id} className="card rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-foreground text-sm">{item.title}</h3>
+                <article key={item._id} className="card overflow-hidden rounded-2xl">
+                  <div className="h-1 bg-gradient-to-r from-accent via-orange-400/70 to-transparent" />
+                  <div className="space-y-5 p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><div className="font-mono text-[9px] uppercase tracking-[0.16em] text-accent">{item.type} report</div><h3 className="mt-1 font-semibold tracking-tight text-foreground">{item.title}</h3></div>
                     <span className="font-mono text-[9px] uppercase px-2 py-0.5 rounded bg-white/5 text-slate-400">
                       {item.status}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
-                    {item.body}
-                  </p>
-                  <div className="text-[9px] font-mono text-slate-500 pt-2 border-t border-white/5">
-                    Grounded in verified live portfolio metrics
+                  <div className="rounded-2xl border border-white/[0.05] bg-black/20 p-5"><RichText text={item.body}/></div>
+                  <div className="flex flex-wrap items-center gap-2 border-t border-white/5 pt-4"><div className="mr-auto text-[9px] font-mono uppercase tracking-[0.12em] text-slate-500">Live portfolio evidence · {item.currency || "USD"}</div>{item.status === "draft" && <button onClick={() => finalizeMutation.mutate(item._id)} className="rounded-lg bg-accent px-3 py-2 text-[10px] font-semibold text-white">Finalize</button>}{["ready", "shared"].includes(item.status) && <button onClick={()=>deliverMutation.mutate(item._id)} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/20 px-3 py-2 text-[10px] text-emerald-300"><Send size={12}/> Deliver</button>}<button onClick={() => downloadReport(item._id, "pdf").catch((error) => toast.error(error instanceof Error ? error.message : "PDF download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border bg-white/[0.02] px-3 py-2 text-[10px] font-semibold"><Download size={12}/> Styled PDF</button><button onClick={() => downloadReport(item._id, "csv").catch((error) => toast.error(error instanceof Error ? error.message : "CSV download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border bg-white/[0.02] px-3 py-2 text-[10px] font-semibold"><Download size={12}/> Detailed CSV</button></div>
                   </div>
-                  <div className="flex gap-2">{item.status === "draft" && <button onClick={() => finalizeMutation.mutate(item._id)} className="rounded-lg bg-accent px-3 py-2 text-[10px] font-semibold text-white">Finalize</button>}{["ready", "shared"].includes(item.status) && <button onClick={()=>deliverMutation.mutate(item._id)} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/20 px-3 py-2 text-[10px] text-emerald-300"><Send size={12}/> Deliver</button>}<button onClick={() => downloadReport(item._id, "pdf").catch((error) => toast.error(error instanceof Error ? error.message : "PDF download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-[10px] font-semibold"><Download size={12}/> PDF</button><button onClick={() => downloadReport(item._id, "csv").catch((error) => toast.error(error instanceof Error ? error.message : "CSV download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-[10px] font-semibold"><Download size={12}/> CSV</button></div>
                 </article>
               ))}
             </div>

@@ -29,6 +29,7 @@ import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { ActionConfirmDialog } from "@/components/ui/ActionConfirmDialog";
 import { toast } from "sonner";
 import type { PortfolioSegment } from "@/types/api";
+import { useOnboardingStore } from "@/store/onboarding";
 import { ExternalIntelligencePanel, NotificationPreferencesPanel, PortfolioSettingsPanel, TeamSettingsPanel, WheelhouseConnectionsPanel, WorkspaceSettingsPanel } from "@/components/dashboard/OperationsSettings";
 
 const money = (value: number | undefined) =>
@@ -39,6 +40,7 @@ const money = (value: number | undefined) =>
   }).format(value ?? 0);
 
 export default function SettingsPage() {
+  const openSetupGuide = useOnboardingStore((state) => state.open);
   const [activeTab, setActiveTab] = useState<"integrations" | "intelligence" | "notifications" | "workspace" | "team" | "portfolios" | "segments" | "underwrite">("integrations");
   const [disconnectConfirm, setDisconnectConfirm] = useState(false);
 
@@ -113,7 +115,7 @@ export default function SettingsPage() {
             Manage data source connections, mobile companion bot settings, and portfolio segments.
           </p>
         </div>
-        <SourceBadge source="kivora" />
+        <button onClick={openSetupGuide} className="rounded-xl border border-border bg-white/[0.02] px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/[0.05]">Open setup guide</button>
       </div>
 
       {/* Tabs */}

@@ -18,10 +18,10 @@ export default function MarketIntelligencePage() {
 
   const refreshMutation = useMutation({
     mutationFn: refreshMarketIntelligence,
-    onSuccess: () => {
-      toast.success("Market Demand Signals Refreshed", {
-        description: "The latest event and weather intelligence has been processed.",
-      });
+    onSuccess: (result) => {
+      const description = `${result.events} live events and ${result.weather} local weather forecasts processed across ${result.clusters} portfolio locations.`;
+      if (result.errors.length) toast.warning("Some signals could not be refreshed", { description: `${description} ${result.errors.map((item) => `${item.provider}: ${item.message}`).join(" · ")}` });
+      else toast.success("Market intelligence is up to date", { description });
       refetch();
     },
     onError: (err) => {
@@ -75,8 +75,8 @@ export default function MarketIntelligencePage() {
         <div className="card rounded-2xl">
           <EmptyState
             icon={FlameKindling}
-            heading="No External Signals Discovered"
-            body="No high-impact events or severe weather anomalies currently overlap with active listings."
+            heading="No Market Signals Yet"
+            body="Refresh the page to collect live event and local weather forecasts for connected listing locations."
           />
         </div>
       ) : (

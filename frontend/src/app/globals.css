@@ -50,8 +50,8 @@
   --color-subtle:     rgba(255,255,255,0.12);
 
   /* Fonts */
-  --font-sans:    "Manrope Variable", Manrope, "Helvetica Neue", system-ui, sans-serif;
-  --font-display: "Sora Variable", Sora, "Helvetica Neue", system-ui, sans-serif;
+  --font-sans:    "Plus Jakarta Sans Variable", "Plus Jakarta Sans", "Helvetica Neue", system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", "Helvetica Neue", system-ui, sans-serif;
   --font-mono:    "JetBrains Mono Variable", "SFMono-Regular", Consolas, monospace;
 
   /* Shadows */
@@ -77,6 +77,17 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background-image: linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,.55), transparent 90%);
+  opacity: .14;
 }
 
 button { cursor: pointer; }
@@ -125,9 +136,10 @@ input, textarea, select { font-family: inherit; }
 
 /* ─── Surface utilities ─────────────────────────────────────────────────────── */
 .card {
-  background: var(--color-surface);
+  background: rgba(15,15,18,.82);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
+  backdrop-filter: blur(12px);
 }
 
 .card-elevated {

@@ -39,7 +39,7 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
   const initials = (user?.email?.address ?? "U").slice(0, 1).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-30 flex h-[64px] items-center gap-3 border-b border-border bg-surface/95 px-4 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-30 flex h-[72px] items-center gap-3 border-b border-white/[0.05] bg-canvas/85 px-4 backdrop-blur-xl sm:px-7">
       {/* Mobile menu button */}
       <button
         className="grid h-9 w-9 place-items-center rounded-lg border border-border text-slate-400 hover:bg-white/5 md:hidden"
@@ -51,7 +51,7 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
 
       {/* Page title */}
       <div className="min-w-0 flex-1">
-        <h1 className="font-display truncate text-[16px] font-bold tracking-tight text-foreground">
+        <h1 className="font-display truncate text-[16px] font-semibold tracking-tight text-foreground">
           {page.title}
         </h1>
         <div className="flex items-center gap-3">

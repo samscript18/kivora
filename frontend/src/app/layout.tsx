@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "@fontsource-variable/jetbrains-mono";
-import "@fontsource-variable/manrope";
-import "@fontsource-variable/sora";
+import "@fontsource-variable/plus-jakarta-sans";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
 
@@ -15,8 +14,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className="dark">
+      <body className="font-sans antialiased">
         <Providers>{children}</Providers>
         <div className="noise-overlay" />
       </body>

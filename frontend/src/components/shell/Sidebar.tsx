@@ -42,7 +42,7 @@ function Logo() {
         <Zap size={17} fill="currentColor" />
       </div>
       <div>
-        <div className="font-display text-[20px] font-extrabold tracking-[-0.06em] text-foreground">
+        <div className="font-display text-[18px] font-semibold tracking-[-0.04em] text-foreground">
           kivora
         </div>
         <div className="mt-[-3px] font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-slate-500">
@@ -77,12 +77,12 @@ export function Sidebar({ mobile, onClose }: SidebarProps) {
       className={`${
         mobile
           ? "fixed inset-y-0 left-0 z-50 shadow-2xl"
-          : "desktop-only fixed inset-y-0 left-0"
-      } flex w-[232px] flex-col border-r border-border bg-surface`}
+          : "desktop-only fixed inset-y-4 left-4 rounded-3xl shadow-2xl"
+      } flex w-[260px] flex-col border border-white/[0.06] bg-[#0f1012]/95 backdrop-blur-xl`}
       aria-label="Primary navigation"
     >
       {/* Header */}
-      <div className="flex h-[64px] items-center justify-between px-5 border-b border-border">
+      <div className="flex h-[64px] items-center justify-between px-5 border-b border-white/[0.05]">
         <Link href="/dashboard/war-room" onClick={onClose} aria-label="Kivora home">
           <Logo />
         </Link>
@@ -146,7 +146,7 @@ export function Sidebar({ mobile, onClose }: SidebarProps) {
                   aria-current={isActive ? "page" : undefined}
                   className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-colors ${
                     isActive
-                      ? "bg-accent/10 text-accent"
+                      ? "bg-white/[0.06] text-foreground"
                       : "text-slate-400 hover:bg-white/5 hover:text-foreground"
                   }`}
                 >

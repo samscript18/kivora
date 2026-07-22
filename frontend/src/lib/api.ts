@@ -25,6 +25,7 @@ import type {
   OrganizationRole,
   WorkItem,
   ManagedPortfolio,
+  AssistantMessage,
 } from "@/types/api";
 
 // ─── Query keys ──────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ export const QUERY_KEYS = {
   organizations: ["organizations"] as const,
   wheelhouseConnections: ["wheelhouse-connections"] as const,
   members: ["organization-members"] as const,
+  assistantHistory: ["assistant-history"] as const,
   strategies: (listingId: string) => ["strategies", listingId] as const,
 } as const;
 
@@ -222,7 +224,7 @@ export const getMarketIntelligence = () =>
   unwrap(api.get<Envelope<MarketSignal[]>>("/market-intelligence"));
 
 export const refreshMarketIntelligence = () =>
-  unwrap(api.post<Envelope<{ refreshed: true }>>("/market-intelligence/refresh"));
+  unwrap(api.post<Envelope<{ source: string; clusters: number; events: number; weather: number; errors: Array<{ provider: string; location: string; message: string }> }>>("/market-intelligence/refresh"));
 
 export const getStrategies = (listingId: string) =>
   unwrap(
@@ -269,6 +271,8 @@ export const askKivora = (question: string) =>
   unwrap(
     api.post<Envelope<AskResult>>("/assistant/ask", { question }),
   );
+export const getAssistantHistory = () => unwrap(api.get<Envelope<AssistantMessage[]>>("/assistant/history"));
+export const clearAssistantHistory = () => unwrap(api.delete<Envelope<{ cleared: number }>>("/assistant/history"));
 
 export const getSegments = () =>
   unwrap(api.get<Envelope<SegmentsData>>("/segments"));

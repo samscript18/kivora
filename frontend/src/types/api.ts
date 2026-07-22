@@ -282,6 +282,8 @@ export interface Report {
   listingId?: string;
   createdAt?: string;
   generatedBy?: string;
+  currency?: string;
+  timezone?: string;
 }
 
 // ─── Owner briefs ────────────────────────────────────────────────────────────
@@ -359,6 +361,14 @@ export interface UnderwriteResult {
 export interface AskResult {
   body: string;
   generatedBy: string;
+  grounded: boolean;
+}
+
+export interface AssistantMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  createdAt: string;
   grounded: boolean;
 }
 

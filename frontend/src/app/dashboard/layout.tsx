@@ -12,7 +12,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       <div className="grid min-h-screen place-items-center bg-canvas">
         <div className="flex items-center gap-3 font-mono text-xs uppercase tracking-widest text-slate-500">
           <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-          Verifying session…
+          Preparing your revenue workspace…
         </div>
       </div>
     );

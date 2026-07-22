@@ -1,10 +1,11 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
-import { askKivora } from "@/lib/api";
-import { useEffect, useRef, useState } from "react";
-import { Bot, Send, User, Sparkles, HelpCircle } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { askKivora, clearAssistantHistory, getAssistantHistory, QUERY_KEYS } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Bot, Send, User, Sparkles, HelpCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { RichText } from "@/components/ui/RichText";
 
 interface Message {
   id: string;
@@ -26,20 +27,31 @@ const suggestedPrompts = [
 ];
 
 export default function AssistantPage() {
+  const queryClient = useQueryClient();
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [pendingMessages, setPendingMessages] = useState<Message[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
+  const historyQuery = useQuery({ queryKey: QUERY_KEYS.assistantHistory, queryFn: getAssistantHistory });
+
+  const messages: Message[] = useMemo(() => [...(historyQuery.data || []).map((message) => ({ id: message.id, role: message.role, text: message.text })), ...pendingMessages], [historyQuery.data, pendingMessages]);
 
   const askMutation = useMutation({
     mutationFn: askKivora,
-    onSuccess: (result) => {
-      setMessages((prev) => [...prev, { id: messageId(), role: "assistant", text: result.body }]);
+    onSuccess: async (result) => {
+      setPendingMessages((prev) => [...prev, { id: messageId(), role: "assistant", text: result.body }]);
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.assistantHistory });
+      setPendingMessages([]);
     },
     onError: (err) => {
       const message = err instanceof Error ? err.message : "Kivora could not answer right now.";
-      setMessages((prev) => [...prev, { id: messageId(), role: "assistant", text: `I couldn't complete that answer. ${message}` }]);
+      setPendingMessages((prev) => [...prev, { id: messageId(), role: "assistant", text: `I couldn't complete that answer. ${message}` }]);
       toast.error(message);
     },
+  });
+  const clearMutation = useMutation({
+    mutationFn: clearAssistantHistory,
+    onSuccess: () => { setPendingMessages([]); queryClient.setQueryData(QUERY_KEYS.assistantHistory, []); toast.success("Conversation cleared"); },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Conversation could not be cleared"),
   });
 
   useEffect(() => {
@@ -50,7 +62,7 @@ export default function AssistantPage() {
     const q = (textToSend || question).trim();
     if (!q || askMutation.isPending) return;
 
-    setMessages((prev) => [...prev, { id: messageId(), role: "user", text: q }]);
+    setPendingMessages((prev) => [...prev, { id: messageId(), role: "user", text: q }]);
     if (!textToSend) setQuestion("");
     askMutation.mutate(q);
   };
@@ -68,9 +80,7 @@ export default function AssistantPage() {
             Natural-language answers grounded strictly in your latest live portfolio data.
           </p>
         </div>
-        <span className="rounded-full border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-          Portfolio grounded
-        </span>
+        <div className="flex items-center gap-2"><span className="rounded-full border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Portfolio grounded</span>{messages.length > 0 && <button onClick={() => window.confirm("Clear your saved Kivora conversation?") && clearMutation.mutate()} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[10px] text-slate-400 hover:text-foreground"><Trash2 size={12}/> Clear chat</button>}</div>
       </div>
 
       {/* Suggested Prompts */}
@@ -93,7 +103,7 @@ export default function AssistantPage() {
       <div className="card rounded-2xl flex flex-col h-[520px] overflow-hidden">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {messages.length === 0 ? (
+          {historyQuery.isLoading ? <div className="grid h-full place-items-center text-xs text-slate-500">Loading your conversation…</div> : messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
               <span className="grid h-12 w-12 place-items-center rounded-2xl bg-accent/10 text-accent">
                 <Bot size={24} />
@@ -123,7 +133,7 @@ export default function AssistantPage() {
                         : "border border-border bg-elevated text-slate-200"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                    {isUser ? <p className="whitespace-pre-wrap">{msg.text}</p> : <RichText text={msg.text} />}
                   </div>
                   {isUser && (
                     <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-xl bg-white/5 text-slate-400 mt-0.5">
