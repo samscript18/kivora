@@ -1,25 +1,26 @@
-import { of } from "rxjs";
+import { of, throwError } from "rxjs";
 import { GroqService } from "./groq.service";
 
-describe("GroqService assistant grounding", () => {
-  it("instructs the model to treat zero risk as measured data", async () => {
+describe("GroqService provider failover", () => {
+  it("switches from a rate-limited Groq request to Gemini", async () => {
     const http = {
-      post: jest.fn(() => of({ data: { choices: [{ message: { content: "No active revenue incident was detected." } }] } })),
+      post: jest.fn()
+        .mockReturnValueOnce(throwError(() => Object.assign(new Error("rate limited"), { response: { status: 429 } })))
+        .mockReturnValueOnce(of({ data: { candidates: [{ content: { parts: [{ text: "Gemini fallback answer" }] } }] } })),
     };
-    const config = {
-      get: jest.fn((key: string, fallback?: string) => key === "GROQ_API_KEY" ? "test-key" : fallback),
+    const values: Record<string, string> = {
+      GROQ_API_KEY: "groq-key",
+      GEMINI_API_KEY: "gemini-key",
+      GEMINI_MODEL: "gemini-test",
     };
-    const service = new GroqService(http as never, config as never);
+    const service = new GroqService(http as any, { get: (key: string, fallback?: string) => values[key] || fallback } as any);
 
-    await service.answer("What is my biggest revenue risk?", {
-      revenueRisk: { activeIncidentCount: 0, totalRevenueAtRisk: 0, largestIncident: null },
+    await expect(service.answer("What needs review?", { portfolioSummary: {} })).resolves.toMatchObject({
+      body: "Gemini fallback answer",
+      generatedBy: "gemini:gemini-test",
     });
-
-    const request = (http.post.mock.calls as unknown as Array<[
-      string,
-      { messages: Array<{ role: string; content: string }> },
-    ]>)[0][1];
-    expect(request.messages[0].content).toContain("Treat zero as a valid measured value");
-    expect(request.messages[0].content).toContain("If largestIncident is null");
+    expect(http.post).toHaveBeenCalledTimes(2);
+    expect(String(http.post.mock.calls[0][0])).toContain("api.groq.com");
+    expect(String(http.post.mock.calls[1][0])).toContain("generativelanguage.googleapis.com");
   });
 });

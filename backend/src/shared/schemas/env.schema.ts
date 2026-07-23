@@ -10,7 +10,8 @@ export function validateEnvironment(env: Environment) {
   required(env.PRIVY_APP_ID, "PRIVY_APP_ID", production);
   required(env.PRIVY_APP_SECRET, "PRIVY_APP_SECRET", production);
   required(env.WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY, "WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY", production);
-  required(env.GROQ_API_KEY, "GROQ_API_KEY", production);
+  if (production && !env.GROQ_API_KEY && !env.GEMINI_API_KEY && !env.OPENROUTER_API_KEY)
+    throw new Error("Configure at least one AI provider: GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY");
   required(env.MAILER_SERVICE, "MAILER_SERVICE", production);
   required(env.MAILER_USER, "MAILER_USER", production);
   required(env.MAILER_PASS, "MAILER_PASS", production);

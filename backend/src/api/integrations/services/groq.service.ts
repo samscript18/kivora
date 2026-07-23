@@ -1,24 +1,42 @@
 import { HttpService } from "@nestjs/axios";
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AxiosError } from "axios";
 import { firstValueFrom } from "rxjs";
 
-type GroqResponse = { choices?: Array<{ message?: { content?: string } }> };
+type OpenAiResponse = { choices?: Array<{ message?: { content?: string } }> };
+type GeminiResponse = { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+type Completion = { body: string; generatedBy: string; grounded: true };
 
+/**
+ * Kivora's provider router. The historic name is retained because it is
+ * injected throughout the app, but completion is deliberately not tied to
+ * Groq: a provider error hands work to Gemini, then OpenRouter.
+ */
 @Injectable()
 export class GroqService {
-  private readonly key?: string;
-  private readonly model: string;
-  private readonly base:string;
+  private readonly groqKey?: string;
+  private readonly groqModel: string;
+  private readonly groqBase: string;
+  private readonly geminiKey?: string;
+  private readonly geminiModel: string;
+  private readonly geminiBase: string;
+  private readonly openRouterKey?: string;
+  private readonly openRouterModel: string;
+  private readonly openRouterBase: string;
 
   constructor(private readonly http: HttpService, config: ConfigService) {
-    this.key = config.get<string>("GROQ_API_KEY");
-    this.model = config.get<string>("GROQ_MODEL", "llama-3.3-70b-versatile");
-    this.base=config.get<string>("GROQ_BASE_URL","https://api.groq.com");
+    this.groqKey = config.get<string>("GROQ_API_KEY");
+    this.groqModel = config.get<string>("GROQ_MODEL", "llama-3.3-70b-versatile");
+    this.groqBase = config.get<string>("GROQ_BASE_URL", "https://api.groq.com");
+    this.geminiKey = config.get<string>("GEMINI_API_KEY");
+    this.geminiModel = config.get<string>("GEMINI_MODEL", "gemini-2.0-flash");
+    this.geminiBase = config.get<string>("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta");
+    this.openRouterKey = config.get<string>("OPENROUTER_API_KEY");
+    this.openRouterModel = config.get<string>("OPENROUTER_MODEL", "google/gemini-2.0-flash-001");
+    this.openRouterBase = config.get<string>("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1");
   }
 
-  get configured() { return Boolean(this.key); }
+  get configured() { return Boolean(this.groqKey || this.geminiKey || this.openRouterKey); }
 
   async ownerBrief(input: { owner?: string; listing: string; cause: string; impact: number; action: string }) {
     return this.complete("Write a concise owner update using only supplied facts. Do not invent numbers, claims, or actions.", JSON.stringify(input));
@@ -49,30 +67,56 @@ export class GroqService {
     ].join(" "), JSON.stringify({ question, context }), 0.35);
   }
 
-  private async complete(system: string, content: string, temperature = 0.2) {
-    if (!this.key) throw new ServiceUnavailableException("The revenue assistant is not configured");
-    try {
-      const response = await firstValueFrom(this.http.post<GroqResponse>(
-        `${this.base}/openai/v1/chat/completions`,
-        {
-          model: this.model,
-          temperature,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content },
-          ],
-        },
-        { headers: { Authorization: `Bearer ${this.key}`, "Content-Type": "application/json" } },
-      ));
-      const body = response.data.choices?.[0]?.message?.content?.trim();
-      if (!body) throw new ServiceUnavailableException("The revenue assistant returned an empty response");
-      return { body, generatedBy: this.model, grounded: true };
-    } catch (error) {
-      if (error instanceof ServiceUnavailableException) throw error;
-      const status = (error as AxiosError).response?.status;
-      throw new ServiceUnavailableException(`The revenue assistant request failed${status ? ` (${status})` : ""}`);
+  private async complete(system: string, content: string, temperature = 0.2): Promise<Completion> {
+    const attempts: Array<() => Promise<Completion>> = [];
+    if (this.groqKey) attempts.push(() => this.groq(system, content, temperature));
+    if (this.geminiKey) attempts.push(() => this.gemini(system, content, temperature));
+    if (this.openRouterKey) attempts.push(() => this.openRouter(system, content, temperature));
+    if (!attempts.length) throw new ServiceUnavailableException("No Kivora AI provider is configured");
+
+    const failures: string[] = [];
+    for (const attempt of attempts) {
+      try { return await attempt(); }
+      catch (error) { failures.push(error instanceof Error ? error.message : "unknown provider error"); }
     }
+    throw new ServiceUnavailableException(`Kivora AI providers are temporarily unavailable (${failures.length} attempted)`);
   }
 
-  capabilities() { return { configured: this.configured, mode: this.configured ? "live" : "disabled" }; }
+  private async groq(system: string, content: string, temperature: number): Promise<Completion> {
+    const response = await firstValueFrom(this.http.post<OpenAiResponse>(
+      `${this.groqBase}/openai/v1/chat/completions`,
+      { model: this.groqModel, temperature, messages: [{ role: "system", content: system }, { role: "user", content }] },
+      { headers: { Authorization: `Bearer ${this.groqKey}`, "Content-Type": "application/json" }, timeout: 30_000 },
+    ));
+    return this.result(response.data.choices?.[0]?.message?.content, `groq:${this.groqModel}`);
+  }
+
+  private async gemini(system: string, content: string, temperature: number): Promise<Completion> {
+    const response = await firstValueFrom(this.http.post<GeminiResponse>(
+      `${this.geminiBase}/models/${encodeURIComponent(this.geminiModel)}:generateContent?key=${encodeURIComponent(this.geminiKey!)}`,
+      { systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: content }] }], generationConfig: { temperature } },
+      { headers: { "Content-Type": "application/json" }, timeout: 30_000 },
+    ));
+    return this.result(response.data.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n"), `gemini:${this.geminiModel}`);
+  }
+
+  private async openRouter(system: string, content: string, temperature: number): Promise<Completion> {
+    const response = await firstValueFrom(this.http.post<OpenAiResponse>(
+      `${this.openRouterBase}/chat/completions`,
+      { model: this.openRouterModel, temperature, messages: [{ role: "system", content: system }, { role: "user", content }] },
+      { headers: { Authorization: `Bearer ${this.openRouterKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://kivora.app", "X-Title": "Kivora" }, timeout: 30_000 },
+    ));
+    return this.result(response.data.choices?.[0]?.message?.content, `openrouter:${this.openRouterModel}`);
+  }
+
+  private result(value: string | undefined, generatedBy: string): Completion {
+    const body = value?.trim();
+    if (!body) throw new Error(`${generatedBy} returned an empty response`);
+    return { body, generatedBy, grounded: true };
+  }
+
+  capabilities() {
+    const providers = [this.groqKey && "groq", this.geminiKey && "gemini", this.openRouterKey && "openrouter"].filter(Boolean);
+    return { configured: providers.length > 0, mode: providers.length ? "live" : "disabled", providers };
+  }
 }

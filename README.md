@@ -114,7 +114,7 @@ docker compose --env-file frontend/.env.local up --build
 | `MONGODB_URI` | MongoDB connection string. |
 | `PRIVY_APP_ID` / `PRIVY_APP_SECRET` | Server-side verification of Privy access tokens. |
 | `WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY` | Exactly 64 hexadecimal characters; encrypts organization-owned Wheelhouse and external-provider credentials with AES-256-GCM. |
-| `GROQ_API_KEY` | Required by the current production configuration validator. |
+| One of `GROQ_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY` | At least one AI provider is required. Kivora automatically fails over in this order: Groq → Gemini → OpenRouter. |
 | `MAILER_SERVICE`, `MAILER_USER`, `MAILER_PASS`, `MAILER_FROM_EMAIL` | SMTP/template mail configuration for secure teammate invitations. |
 
 ### Core runtime variables
@@ -140,6 +140,7 @@ docker compose --env-file frontend/.env.local up --build
 | `TICKETMASTER_API_KEY` | Platform-managed event intelligence. Organizations can override it with their own encrypted credential. |
 | `OPENWEATHER_API_KEY` | Platform-managed weather intelligence. Organizations can override it with their own encrypted credential. |
 | `GROQ_MODEL` | Optional model override; defaults to `llama-3.3-70b-versatile`. |
+| `GEMINI_MODEL` / `OPENROUTER_MODEL` | Optional fallback model overrides; defaults are `gemini-2.0-flash` and `google/gemini-2.0-flash-001`. |
 | `WHEELHOUSE_API_KEY` | Legacy migration input only. New integrations should be connected per organization in Kivora. |
 | `KIVORA_APPROVAL_TOKEN` | Optional supplemental approval token. It never bypasses Privy authentication or tenant binding. |
 
