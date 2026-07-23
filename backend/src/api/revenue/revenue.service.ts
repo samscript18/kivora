@@ -637,7 +637,20 @@ export class RevenueService {
     };
     const citations = this.assistantCitations(intent, normalizedQuestion, dashboard);
     if (actor && this.assistantMessages) await this.assistantMessages.create({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub), role: "user", text: normalizedQuestion, channel, grounded: true, intent });
-    const answer = await this.groq.answer(normalizedQuestion, context);
+    let answer: { body: string; generatedBy: string; grounded: boolean };
+    try {
+      answer = await this.groq.answer(normalizedQuestion, context);
+    } catch {
+      // A Telegram conversation must remain useful when the optional language
+      // model is temporarily rate-limited. The dashboard context has already
+      // been loaded from Kivora's stored/live portfolio evidence, so return a
+      // transparent deterministic answer instead of surfacing a provider 429.
+      answer = {
+        body: this.groundedAssistantFallback(intent, dashboard),
+        generatedBy: "kivora-grounded-fallback",
+        grounded: true,
+      };
+    }
     if (actor && this.assistantMessages) await this.assistantMessages.create({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub), role: "assistant", text: answer.body, channel, generatedBy: answer.generatedBy, grounded: answer.grounded, citations, intent });
     return { ...answer, citations, intent };
   }
@@ -650,6 +663,22 @@ export class RevenueService {
     if (/^(thanks|thank you|thx|great|awesome|perfect|cool)( you)?$/.test(compact)) return "You’re welcome. When you’re ready, I can help turn the next portfolio question into a clear, evidence-based decision.";
     if (/^(help|what can you do|what do you do)$/.test(compact)) return "I can help you understand live portfolio performance, incidents, pricing opportunities, market signals, recommendation evidence, and the safest next action. Try “What is my biggest revenue risk today?” or “Which listing needs pricing review?”";
     return null;
+  }
+
+  private groundedAssistantFallback(intent: string, dashboard: any) {
+    const summary = dashboard.summary || {};
+    const opportunities = (dashboard.opportunities || []).slice(0, 3);
+    const priorities = (dashboard.priorities || []).slice(0, 3);
+    const opportunityText = opportunities.length
+      ? opportunities.map((item: any, index: number) => `${index + 1}. ${item.property || item.listing || "Listing"}: ${item.action || "Review pricing"} — estimated impact ${item.currency || "USD"} ${Math.round(Number(item.impact || item.estimatedImpact || 0)).toLocaleString()} (${item.confidence ?? "unavailable"}% confidence)`).join("\n")
+      : "No open revenue opportunities are currently available in the latest portfolio scan.";
+    const priorityText = priorities.length
+      ? priorities.map((item: any, index: number) => `${index + 1}. ${item.title || "Portfolio review"}${item.property ? ` — ${item.property}` : ""}`).join("\n")
+      : "No additional priority item is available from the latest scan.";
+    const firstLine = intent === "decision_plan"
+      ? "Recommendation: review the highest-impact opportunity in Kivora before approving any pricing action."
+      : "I’m using Kivora’s latest portfolio evidence while the AI response service is temporarily busy.";
+    return `${firstLine}\n\nPortfolio snapshot\nRevenue at risk: USD ${Math.round(Number(summary.atRisk || 0)).toLocaleString()}\nOpen opportunities: ${Number(summary.opportunities || 0)}\nAwaiting approval: ${Number(summary.awaitingApproval || 0)}\nMarket signals: ${Number(summary.marketSignals || 0)}\n\nTop opportunities\n${opportunityText}\n\nRecommended review order\n${priorityText}\n\nNo pricing has been changed. Open the relevant Kivora recommendation to inspect its evidence, run a fresh preview, and explicitly approve only if the live state still supports it.`;
   }
 
   private assistantIntent(question: string) {
