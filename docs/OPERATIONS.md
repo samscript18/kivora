@@ -8,7 +8,7 @@ Before deploying, ensure the environment contains the production-required variab
 - `PRIVY_APP_ID` and `PRIVY_APP_SECRET` must be configured on the API, while only `NEXT_PUBLIC_PRIVY_APP_ID` is configured in the browser.
 - `FRONTEND_URL` must include the actual deployed browser origin.
 - `BACKEND_PUBLIC_URL` must be HTTPS when Telegram is enabled.
-- Resend must use a verified sender domain for invitation delivery.
+- Configure `MAILER_SERVICE`, `MAILER_USER`, `MAILER_PASS`, and `MAILER_FROM_EMAIL` for SMTP invitation delivery. The configured sender must be authorized by the mail provider.
 
 Do not set organization Wheelhouse credentials in frontend environment variables. Add them through the authenticated Kivora connection flow.
 

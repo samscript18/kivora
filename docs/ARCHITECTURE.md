@@ -22,7 +22,7 @@ NestJS API
               ├─ Ticketmaster/OpenWeather: external demand signals
               ├─ Groq: grounded narrative assistance
               ├─ Telegram: per-user delivery and signed action intents
-              └─ Resend: organization invitations
+              └─ SMTP + Handlebars: organization invitations
 ```
 
 The web application is responsible for rendering, role-aware affordances, and user interaction. The API remains the authority for authentication, tenant scoping, mutation authorization, provider calls, lifecycle transitions, audits, and persisted records.

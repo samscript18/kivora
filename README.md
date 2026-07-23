@@ -62,7 +62,7 @@ The backend enforces these roles. UI controls are also hidden or disabled where 
 - A 32-byte hexadecimal encryption key for organization credentials.
 - At least one Wheelhouse API credential connected through Kivora for a ready portfolio.
 
-Optional integrations are Groq, Telegram, Resend, Ticketmaster, and OpenWeather. They are feature-specific; Kivora remains explicit when one is unavailable.
+Optional integrations are Groq, Telegram, SMTP invitation delivery, Ticketmaster, and OpenWeather. They are feature-specific; Kivora remains explicit when one is unavailable.
 
 ## Local setup
 
