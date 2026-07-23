@@ -10,6 +10,8 @@ export class AssistantMessage {
   @Prop({ default: "web", enum: ["web", "telegram"] }) channel!: "web" | "telegram";
   @Prop() generatedBy?: string;
   @Prop({ default: true }) grounded!: boolean;
+  @Prop({ type: [{ label: String, href: String, description: String }], default: [] }) citations?: Array<{ label: string; href: string; description?: string }>;
+  @Prop() intent?: string;
 }
 
 export const AssistantMessageSchema = SchemaFactory.createForClass(AssistantMessage);

@@ -8,7 +8,7 @@ import { AcceptInvitationDto, ChangeMemberDto, CreateOrganizationDto, InviteMemb
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
   @Post("sync") @UseGuards(PrivyAuthGuard)
-  sync(@CurrentUser() user: AuthenticatedUser, @Body() body: { email?: string; name?: string }) { return this.auth.sync(user.privyUserId, body); }
+  sync(@CurrentUser() user: AuthenticatedUser) { return this.auth.findOrCreate(user.privyUserId); }
 
   @Get("me") @UseGuards(PrivyAuthGuard)
   me(@CurrentUser() user: AuthenticatedUser) { return user; }

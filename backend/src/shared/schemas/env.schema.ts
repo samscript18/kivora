@@ -11,8 +11,10 @@ export function validateEnvironment(env: Environment) {
   required(env.PRIVY_APP_SECRET, "PRIVY_APP_SECRET", production);
   required(env.WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY, "WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY", production);
   required(env.GROQ_API_KEY, "GROQ_API_KEY", production);
-  required(env.RESEND_API_KEY, "RESEND_API_KEY", production);
-  required(env.RESEND_FROM_EMAIL, "RESEND_FROM_EMAIL", production);
+  required(env.MAILER_SERVICE, "MAILER_SERVICE", production);
+  required(env.MAILER_USER, "MAILER_USER", production);
+  required(env.MAILER_PASS, "MAILER_PASS", production);
+  required(env.MAILER_FROM_EMAIL, "MAILER_FROM_EMAIL", production);
   if (production && env.TELEGRAM_BOT_TOKEN) {
     required(env.TELEGRAM_WEBHOOK_SECRET, "TELEGRAM_WEBHOOK_SECRET", true);
     required(env.TELEGRAM_LINK_SECRET, "TELEGRAM_LINK_SECRET", true);

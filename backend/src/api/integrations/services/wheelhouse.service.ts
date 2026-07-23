@@ -41,6 +41,8 @@ export class WheelhouseService {
   private cache?: CacheStore;
   private cacheHits = 0;
   private cacheMisses = 0;
+  private redisUnavailableUntil = 0;
+  private redisLastError?: string;
   constructor(private readonly http: HttpService, config: ConfigService) {
     this.base = config.get("WHEELHOUSE_BASE_URL", "https://api.usewheelhouse.com/ss_api/v1");
     this.key = config.get("WHEELHOUSE_API_KEY");
@@ -51,12 +53,23 @@ export class WheelhouseService {
         lazyConnect: false,
         enableOfflineQueue: false,
         maxRetriesPerRequest: 1,
-        connectTimeout: 10_000,
+        connectTimeout: 5_000,
+        // Redis is an optimization, never a reason to keep retrying in the
+        // background or to degrade live Wheelhouse reads.
+        retryStrategy: (attempt: number) => attempt > 2 ? null : Math.min(1_000, attempt * 250),
       };
       if (redisUrl.startsWith("rediss://")) {
         (redisOptions as { tls?: { rejectUnauthorized: boolean } }).tls = { rejectUnauthorized: false };
       }
-      this.cache = new Redis(redisUrl, redisOptions as never);
+      const client = new Redis(redisUrl, redisOptions as never);
+      // ioredis emits an `error` event even when individual cache commands are
+      // caught. Listening here prevents an unreachable optional cache from
+      // becoming an unhandled process error.
+      client.on("error", (error) => {
+        this.redisUnavailableUntil = Date.now() + 60_000;
+        this.redisLastError = error.message.slice(0, 200);
+      });
+      this.cache = client;
     }
   }
   get configured() { return Boolean(this.key); }
@@ -86,11 +99,12 @@ export class WheelhouseService {
   private async getCached<T>(key: string): Promise<T | undefined> {
     // Redis is authoritative when configured so a mutation on any API instance
     // invalidates the value for every instance. Memory remains a fallback only.
-    if (this.cache) {
+    if (this.cache && Date.now() >= this.redisUnavailableUntil) {
       try {
         const value = await this.cache.get(key);
         if (value) { this.cacheHits++; return JSON.parse(value) as T; }
-      } catch {
+      } catch (error) {
+        this.markRedisUnavailable(error);
         // Continue to the short-lived local fallback if Redis is unavailable.
       }
     }
@@ -104,12 +118,13 @@ export class WheelhouseService {
   private async setCached(key: string, value: unknown) {
     if (value === undefined) return;
     const payload = JSON.stringify(value);
-    if (this.cache) {
+    if (this.cache && Date.now() >= this.redisUnavailableUntil) {
       try {
         await this.cache.set(key, payload, "EX", this.cacheTtlSeconds);
         this.memoryCache.delete(key);
         return;
-      } catch {
+      } catch (error) {
+        this.markRedisUnavailable(error);
         // Redis is optional; use a local fallback while it recovers.
       }
     }
@@ -135,7 +150,7 @@ export class WheelhouseService {
     ];
     const keys = paths.map((cachedPath) => this.cacheKey("GET", cachedPath, credential));
     keys.forEach((key) => this.memoryCache.delete(key));
-    try { if (this.cache) await this.cache.del(...keys); } catch { /* local invalidation still protects this instance */ }
+    try { if (this.cache && Date.now() >= this.redisUnavailableUntil) await this.cache.del(...keys); } catch (error) { this.markRedisUnavailable(error); /* local invalidation still protects this instance */ }
   }
 
   private async request<T>(method: "GET" | "POST" | "PUT", path: string, data?: unknown, credential?: string, retryTransient = true): Promise<T> {
@@ -250,8 +265,13 @@ export class WheelhouseService {
       // the real upstream response establishes write capability.
       writeActions: configured && !state.readOnlyDetected,
       writeAccess,
-      cache: { backend: this.cache ? "redis" : "memory", ttlSeconds: this.cacheTtlSeconds, hits: this.cacheHits, misses: this.cacheMisses },
+      cache: { backend: this.cache ? "redis" : "memory", status: this.cache && Date.now() < this.redisUnavailableUntil ? "degraded" : "available", ttlSeconds: this.cacheTtlSeconds, hits: this.cacheHits, misses: this.cacheMisses, lastError: this.redisLastError || null },
     };
+  }
+
+  private markRedisUnavailable(error: unknown) {
+    this.redisUnavailableUntil = Date.now() + 60_000;
+    this.redisLastError = error instanceof Error ? error.message.slice(0, 200) : "Redis cache request failed";
   }
 
   private state(credential?: string) {

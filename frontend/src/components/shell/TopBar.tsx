@@ -1,6 +1,7 @@
 "use client";
 import { Bell, LogOut, Menu, Search } from "lucide-react";
 import { usePrivy } from "@privy-io/react-auth";
+import { getPrivyProfile } from "@/lib/privy-profile";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDashboard, getNotifications, QUERY_KEYS } from "@/lib/api";
 import { SyncStatus } from "@/components/ui/SyncStatus";
@@ -41,7 +42,7 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
   const lastSynced = dataUpdatedAt ? new Date(dataUpdatedAt).toISOString() : undefined;
   const notifications = useQuery({ queryKey: QUERY_KEYS.notifications, queryFn: getNotifications, staleTime: 30_000, refetchInterval: 60_000 });
   const unreadCount = notifications.data?.filter((item) => !item.readAt).length ?? 0;
-  const initials = (user?.email?.address ?? "U").slice(0, 1).toUpperCase();
+  const initials = (getPrivyProfile(user).email ?? "U").slice(0, 1).toUpperCase();
   const handleLogout = async () => {
     await logout();
     queryClient.clear();

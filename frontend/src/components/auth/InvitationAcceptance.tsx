@@ -8,17 +8,24 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { acceptOrganizationInvitation, setAccessTokenProvider, syncUser } from "@/lib/api";
+import { getPrivyProfile } from "@/lib/privy-profile";
 import { useOnboardingStore } from "@/store/onboarding";
 
 export function InvitationAcceptance({ token }: { token: string }) {
-  const { ready, authenticated, login, user, getAccessToken } = usePrivy();
+  const { ready, authenticated, login, getAccessToken, user } = usePrivy();
   const router = useRouter();
   const queryClient = useQueryClient();
   const resetOnboarding = useOnboardingStore((state) => state.resetForSignIn);
   const acceptance = useMutation({
     mutationFn: async () => {
       setAccessTokenProvider(getAccessToken);
-      await syncUser({ email: user?.email?.address, name: user?.email?.address?.split("@")[0] });
+      const profile = getPrivyProfile(user);
+      if (!profile.email) {
+        throw new Error("Privy did not provide a verified email for this session. Please sign out, then sign in using the invited email address.");
+      }
+      // This is deliberately sequenced before acceptance. The backend uses the
+      // stored verified address to enforce an invitation's exact-email rule.
+      await syncUser(profile);
       return acceptOrganizationInvitation(token);
     },
     onSuccess: async (result) => {
@@ -60,7 +67,8 @@ export function InvitationAcceptance({ token }: { token: string }) {
           </button>
         ) : acceptance.isError ? (
           <div className="mt-7 rounded-2xl border border-red-500/20 bg-red-500/5 p-4 text-left text-xs leading-6 text-red-300">
-            This link may be expired, already used, revoked, or assigned to a different email.
+            <p>{acceptance.error instanceof Error ? acceptance.error.message : "This link may be expired, already used, revoked, or assigned to a different email."}</p>
+            <p className="mt-2 text-red-200/80">The expiry shown in the invitation email is authoritative. If it has not passed, make sure Privy is signed in with the exact invited address.</p>
             <button onClick={() => acceptance.reset()} className="mt-3 block font-bold text-white">Try again</button>
           </div>
         ) : (

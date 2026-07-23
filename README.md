@@ -115,7 +115,7 @@ docker compose --env-file frontend/.env.local up --build
 | `PRIVY_APP_ID` / `PRIVY_APP_SECRET` | Server-side verification of Privy access tokens. |
 | `WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY` | Exactly 64 hexadecimal characters; encrypts organization-owned Wheelhouse and external-provider credentials with AES-256-GCM. |
 | `GROQ_API_KEY` | Required by the current production configuration validator. |
-| `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Required by the current production configuration validator for invitation delivery. |
+| `MAILER_SERVICE`, `MAILER_USER`, `MAILER_PASS`, `MAILER_FROM_EMAIL` | SMTP/template mail configuration for secure teammate invitations. |
 
 ### Core runtime variables
 

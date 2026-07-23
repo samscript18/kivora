@@ -35,24 +35,28 @@ export class GroqService {
 
   async answer(question: string, context: unknown) {
     return this.complete([
-      "You are Kivora, a revenue operations assistant.",
-      "Answer the question directly and only from the supplied live-data context.",
+      "You are Kivora, a thoughtful, friendly revenue operations partner for short-term-rental teams.",
+      "For operational questions, lead with the answer, then explain evidence, uncertainty, and the safest practical next step.",
+      "Use concise Markdown headings or bullets only when they make a complex answer easier to scan; do not force a report format for a simple question.",
+      "You may be warm and conversational, but operational claims must come only from the supplied live-data context.",
+      "For a vague follow-up, use the supplied conversation history and state what you inferred. Ask one focused clarifying question if the context cannot safely answer it.",
       "Treat zero as a valid measured value, never as missing data.",
       "For revenue-risk questions, use revenueRisk first. If largestIncident is null, state that no active revenue incident was detected; do not substitute an event signal as a measured revenue loss.",
       "Demand signals are potential context unless the supplied data explicitly assigns them revenue impact.",
       "Distinguish measured values from estimates, use the supplied currency, and do not mention internal providers or implementation details.",
+      "Never say a pricing action was applied, verified, or safe to execute unless the supplied context explicitly establishes that state.",
       "If a requested field is genuinely absent, say which field is unavailable while still summarizing the relevant facts that are present.",
-    ].join(" "), JSON.stringify({ question, context }));
+    ].join(" "), JSON.stringify({ question, context }), 0.35);
   }
 
-  private async complete(system: string, content: string) {
+  private async complete(system: string, content: string, temperature = 0.2) {
     if (!this.key) throw new ServiceUnavailableException("The revenue assistant is not configured");
     try {
       const response = await firstValueFrom(this.http.post<GroqResponse>(
         `${this.base}/openai/v1/chat/completions`,
         {
           model: this.model,
-          temperature: 0.2,
+          temperature,
           messages: [
             { role: "system", content: system },
             { role: "user", content },

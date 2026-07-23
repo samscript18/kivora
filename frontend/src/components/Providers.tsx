@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
 import { ApiRequestError, setAccessTokenProvider, setOrganizationIdProvider, syncUser } from "@/lib/api";
+import { getPrivyProfile } from "@/lib/privy-profile";
 
 const ORGANIZATION_STORAGE_KEY = "kivora.organizationId";
 
@@ -20,9 +21,8 @@ function AuthBridge({ children }: { children: React.ReactNode }) {
 
 	useEffect(() => {
 		if (!ready || !authenticated || !user) return;
-		const email = user.email?.address;
-		const name = email?.split("@")[0];
-		const synchronize = () => syncUser({ email, name });
+		const profile = getPrivyProfile(user);
+		const synchronize = () => syncUser(profile);
 		synchronize()
 			.catch((error) => {
 				if (error instanceof ApiRequestError && error.status === 403 && window.localStorage.getItem(ORGANIZATION_STORAGE_KEY)) {

@@ -449,7 +449,11 @@ export interface AskResult {
   body: string;
   generatedBy: string;
   grounded: boolean;
+  intent?: string;
+  citations?: AssistantCitation[];
 }
+
+export interface AssistantCitation { label: string; href: string; description?: string; }
 
 export interface AssistantMessage {
   id: string;
@@ -457,6 +461,8 @@ export interface AssistantMessage {
   text: string;
   createdAt: string;
   grounded: boolean;
+  citations?: AssistantCitation[];
+  intent?: string;
 }
 
 // ─── Capabilities ────────────────────────────────────────────────────────────

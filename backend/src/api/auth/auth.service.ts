@@ -23,17 +23,26 @@ export class AuthService {
     const update: Record<string, string> = {};
     if (profile?.email) update.email = profile.email.toLowerCase();
     if (profile?.name) update.name = profile.name;
-    const user = await this.users.findOneAndUpdate(
+    let user = await this.users.findOneAndUpdate(
       { privyUserId },
-      { $set: update, $setOnInsert: { privyUserId, name: profile?.name || "Revenue manager", role: "manager" } },
+      // `name` belongs exclusively in `$set`: MongoDB rejects an upsert when a
+      // field appears in both `$set` and `$setOnInsert`. The schema supplies
+      // the default name for a profile that has not provided one.
+      { $set: update, $setOnInsert: { privyUserId, role: "manager" } },
       { upsert: true, returnDocument: "after" },
     ).lean();
-    const membership = await this.ensureWorkspace(user!);
-    return this.serialize(user!, membership);
+    // Defensive fallback for a driver returning no post-upsert document.
+    if (!user) {
+      const fallback = await this.users.findOne({ privyUserId }).lean();
+      if (fallback) user = fallback;
+    }
+    if (!user) throw new ConflictException("Kivora could not create the signed-in user record");
+    const membership = await this.ensureWorkspace(user);
+    return this.serialize(user, membership);
   }
 
-  async findOrCreate(privyUserId: string, requestedOrganizationId?: string) {
-    const synced = await this.sync(privyUserId);
+  async findOrCreate(privyUserId: string, requestedOrganizationId?: string, profile?: { email?: string; name?: string }) {
+    const synced = await this.sync(privyUserId, profile);
     const stored = await this.users.findById(synced.id).select("defaultOrganizationId").lean();
     const selected = requestedOrganizationId || (stored?.defaultOrganizationId ? String(stored.defaultOrganizationId) : synced.organizationId);
     if (!selected || selected === synced.organizationId) return synced;
@@ -131,7 +140,7 @@ export class AuthService {
       return { id: String(invitation._id), email, role: input.role, status: "sent", expiresAt: invitation.expiresAt };
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0, 500) : "Invitation email delivery failed";
-      await this.invitations.updateOne({ _id: invitation._id }, { $set: { status: "revoked", revokedAt: new Date(), deliveryProvider: "resend", deliveryError: message } });
+      await this.invitations.updateOne({ _id: invitation._id }, { $set: { status: "revoked", revokedAt: new Date(), deliveryProvider: "smtp", deliveryError: message } });
       throw error;
     }
   }
@@ -144,22 +153,24 @@ export class AuthService {
   }
 
   async acceptInvitation(actor: AuthenticatedUser, token: string) {
-    const invitation = await this.invitations.findOneAndUpdate(
-      { tokenHash: this.hash(token), status: "pending", expiresAt: { $gt: new Date() } },
-      { $set: { status: "accepted", acceptedAt: new Date(), acceptedBy: this.objectId(actor.sub, "User") } },
-      { returnDocument: "after" },
-    ).select("+tokenHash").lean();
+    const tokenHash = this.hash(token);
+    const invitation = await this.invitations.findOne({ tokenHash, status: "pending", expiresAt: { $gt: new Date() } }).select("+tokenHash").lean();
     if (!invitation) throw new BadRequestException("Invitation is invalid, expired, or already used");
     if (!actor.email || invitation.email !== actor.email.toLowerCase()) {
-      await this.invitations.updateOne({ _id: invitation._id }, { $set: { status: "pending" }, $unset: { acceptedAt: 1, acceptedBy: 1 } });
-      throw new ForbiddenException("Invitation email does not match the signed-in account");
+      throw new ForbiddenException(`This invitation was sent to ${invitation.email}. Sign in with that exact email address to accept it.`);
     }
+    const claimed = await this.invitations.findOneAndUpdate(
+      { _id: invitation._id, tokenHash, status: "pending", expiresAt: { $gt: new Date() } },
+      { $set: { status: "accepted", acceptedAt: new Date(), acceptedBy: this.objectId(actor.sub, "User") } },
+      { returnDocument: "after" },
+    ).lean();
+    if (!claimed) throw new ConflictException("This invitation was just used or is no longer available");
     await this.memberships.findOneAndUpdate(
-      { organizationId: invitation.organizationId, userId: this.objectId(actor.sub, "User") },
-      { $set: { role: invitation.role, status: "active", invitedBy: invitation.createdBy, joinedAt: new Date() } },
+      { organizationId: claimed.organizationId, userId: this.objectId(actor.sub, "User") },
+      { $set: { role: claimed.role, status: "active", invitedBy: claimed.createdBy, joinedAt: new Date() } },
       { upsert: true, returnDocument: "after" },
     );
-    return { organizationId: String(invitation.organizationId), role: invitation.role, status: "active" };
+    return { organizationId: String(claimed.organizationId), role: claimed.role, status: "active" };
   }
 
   async changeMember(actor: AuthenticatedUser, membershipId: string, input: { role?: OrganizationRole; status?: string }) {
@@ -192,14 +203,26 @@ export class AuthService {
   private async ensureWorkspace(user: { _id: Types.ObjectId; name: string }) {
     const existing = await this.memberships.findOne({ userId: user._id, status: "active" }).sort({ createdAt: 1 }).lean();
     if (existing) return existing;
-    const organization = await this.organizations.create({
-      name: `${user.name || "Revenue"}'s workspace`,
-      slug: `workspace-${String(user._id).toLowerCase()}`,
-      createdBy: user._id,
-      defaultTimezone: "UTC",
-    });
-    const membership = await this.memberships.create({ organizationId: organization._id, userId: user._id, role: "owner", status: "active", joinedAt: new Date() });
-    await this.users.updateOne({ _id: user._id }, { $set: { defaultOrganizationId: organization._id } });
+    const slug = `workspace-${String(user._id).toLowerCase()}`;
+    let organization = await this.organizations.findOne({ slug }).lean();
+    if (!organization) {
+      try {
+        organization = (await this.organizations.create({ name: `${user.name || "Revenue"}'s workspace`, slug, createdBy: user._id, defaultTimezone: "UTC" })).toObject();
+      } catch (error: any) {
+        // Auth hydration can happen twice in development or during invitation
+        // acceptance. A competing request may have created this exact workspace.
+        if (error?.code !== 11000) throw error;
+        organization = await this.organizations.findOne({ slug }).lean();
+      }
+    }
+    if (!organization) throw new ConflictException("Kivora workspace creation did not complete");
+    const membership = await this.memberships.findOneAndUpdate(
+      { organizationId: organization._id, userId: user._id },
+      { $setOnInsert: { organizationId: organization._id, userId: user._id, role: "owner", status: "active", joinedAt: new Date() } },
+      { upsert: true, returnDocument: "after" },
+    ).lean();
+    if (!membership) throw new ConflictException("Kivora workspace membership creation did not complete");
+    await this.users.updateOne({ _id: user._id, defaultOrganizationId: { $exists: false } }, { $set: { defaultOrganizationId: organization._id } });
     return membership;
   }
 

@@ -1,5 +1,4 @@
 import { Module } from "@nestjs/common";
-import { HttpModule } from "@nestjs/axios";
 import { MongooseModule } from "@nestjs/mongoose";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
@@ -10,10 +9,11 @@ import { Membership, MembershipSchema } from "./schemas/membership.schema";
 import { Organization, OrganizationSchema } from "./schemas/organization.schema";
 import { Invitation, InvitationSchema } from "./schemas/invitation.schema";
 import { InvitationEmailService } from "./services/invitation-email.service";
+import { MailModule } from "../../shared/mail/mail.module";
 
 @Module({
   imports: [
-    HttpModule.register({ timeout: 15_000, maxRedirects: 2 }),
+    MailModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Organization.name, schema: OrganizationSchema },

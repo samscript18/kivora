@@ -299,10 +299,13 @@ export class RevenueController {
     const callback = body?.callback_query;
     if (callback?.data && callback?.message?.chat?.id && callback?.from?.id) {
       const chatId = String(callback.message.chat.id);
-      const actor = await this.telegram.linkedActor(chatId, String(callback.from.id));
+      let actor: any;
       let intent: any;
       try {
-        await this.telegram.acknowledgeCallback(String(callback.id), "Processing action…");
+        // Telegram acknowledgement is UX only. Do not let a transient Bot API
+        // failure prevent the signed Kivora action from being evaluated.
+        await this.telegram.acknowledgeCallback(String(callback.id), "Processing action…").catch(() => undefined);
+        actor = await this.telegram.linkedActor(chatId, String(callback.from.id));
         await this.telegram.sendChatAction(chatId).catch(() => undefined);
         intent = await this.telegram.consumeActionIntent(callback.data, actor);
         const user = actor as AuthenticatedUser;
@@ -484,9 +487,13 @@ export class RevenueController {
           return { ok: true };
         }
       } catch (error) {
-        await this.telegram.acknowledgeCallback(String(callback.id), error instanceof Error ? error.message.slice(0, 120) : "Action failed").catch(() => undefined);
-        await this.telegram.recordCallbackFailure(actor, chatId, error, intent || {});
-        throw error;
+        const message = error instanceof Error ? error.message.slice(0, 300) : "The action could not be completed";
+        await this.telegram.acknowledgeCallback(String(callback.id), message.slice(0, 120)).catch(() => undefined);
+        if (actor) await this.telegram.recordCallbackFailure(actor, chatId, error, intent || {});
+        await this.telegram.sendToChat(chatId, `⚠️ I couldn’t complete that action. ${message}\n\nFor an expired or already-used button, open the latest recommendation alert and choose Details & previews to generate fresh signed controls.`).catch(() => undefined);
+        // Telegram has already received user feedback. Returning 200 prevents
+        // delivery retries from replaying a single-use callback intent.
+        return { ok: false };
       }
     }
 

@@ -22,6 +22,7 @@ import {opportunityRuleEligible}from"./opportunity-rules";
 import {recommendedPricingStrategy,scheduledGroupResult}from"./scheduled-action";
 
 type Factor = { label: string; value: string; note: string };
+type AssistantCitation = { label: string; href: string; description?: string };
 type LiveIncident = {
   id: string; externalId: string; listingId: string; channel: string; severity: string; title: string;
   listing: string; location: string; currentRate: number; recommendedRate: number; revenueAtRisk: number;
@@ -583,13 +584,25 @@ export class RevenueService {
   }
 
   async ask(question: string, actor?: AuthenticatedUser, channel: "web" | "telegram" = "web") {
+    const normalizedQuestion = question.trim();
+    if (!normalizedQuestion) throw new BadRequestException("Ask Kivora a question to continue");
     const history = actor && this.assistantMessages ? await this.assistantMessages.find({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub) }).sort({ createdAt: -1 }).limit(12).lean() : [];
+    const socialReply = this.conversationalReply(normalizedQuestion, actor?.name);
+    if (socialReply) {
+      if (actor && this.assistantMessages) {
+        await this.assistantMessages.create({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub), role: "user", text: normalizedQuestion, channel, grounded: false });
+        await this.assistantMessages.create({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub), role: "assistant", text: socialReply, channel, generatedBy: "kivora-conversation", grounded: false, intent: "conversation" });
+      }
+      return { body: socialReply, generatedBy: "kivora-conversation", grounded: false };
+    }
     const dashboard = await this.dashboard(actor);
+    const intent = this.assistantIntent(normalizedQuestion);
     const rankedIncidents = [...this.incidentsFor(actor)].sort((a, b) => b.revenueAtRisk - a.revenueAtRisk);
     const largest = rankedIncidents[0];
     const context = {
       asOf: this.lastScanFor(actor),
       currency: "USD",
+      user: { name: actor?.name || "there", role: actor?.organizationRole || "viewer" },
       portfolioSummary: dashboard.summary,
       revenueRisk: {
         activeIncidentCount: rankedIncidents.length,
@@ -616,17 +629,71 @@ export class RevenueService {
         measuredRevenueImpact: null,
       })),
       conversationHistory: history.reverse().map((message) => ({ role: message.role, text: message.text })),
+      assistantMode: {
+        intent,
+        instruction: this.assistantIntentInstruction(intent),
+        actionPolicy: "You may prepare a recommendation or decision plan, but never claim to execute a provider action. Direct the user to review and explicitly approve in Kivora.",
+      },
     };
-    if (actor && this.assistantMessages) await this.assistantMessages.create({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub), role: "user", text: question.trim(), channel, grounded: true });
-    const answer = await this.groq.answer(question, context);
-    if (actor && this.assistantMessages) await this.assistantMessages.create({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub), role: "assistant", text: answer.body, channel, generatedBy: answer.generatedBy, grounded: answer.grounded });
-    return answer;
+    const citations = this.assistantCitations(intent, normalizedQuestion, dashboard);
+    if (actor && this.assistantMessages) await this.assistantMessages.create({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub), role: "user", text: normalizedQuestion, channel, grounded: true, intent });
+    const answer = await this.groq.answer(normalizedQuestion, context);
+    if (actor && this.assistantMessages) await this.assistantMessages.create({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub), role: "assistant", text: answer.body, channel, generatedBy: answer.generatedBy, grounded: answer.grounded, citations, intent });
+    return { ...answer, citations, intent };
+  }
+
+  private conversationalReply(question: string, name?: string) {
+    const compact = question.toLowerCase().replace(/[^a-z0-9\s']/g, " ").replace(/\s+/g, " ").trim();
+    const person = name?.trim().split(/\s+/)[0] || "there";
+    if (/^(hi|hello|hey|yo|good morning|good afternoon|good evening)( there)?$/.test(compact)) return `Hi ${person} — I’m here and ready to help with your portfolio. Ask me about revenue risk, pricing opportunities, demand signals, or the safest next action.`;
+    if (/^(how are you|how are you doing|hows it going|what s up|whats up)( today)?$/.test(compact)) return "I’m doing well, thanks for asking. I’m ready to look at your latest portfolio context whenever you are — what would you like to review?";
+    if (/^(thanks|thank you|thx|great|awesome|perfect|cool)( you)?$/.test(compact)) return "You’re welcome. When you’re ready, I can help turn the next portfolio question into a clear, evidence-based decision.";
+    if (/^(help|what can you do|what do you do)$/.test(compact)) return "I can help you understand live portfolio performance, incidents, pricing opportunities, market signals, recommendation evidence, and the safest next action. Try “What is my biggest revenue risk today?” or “Which listing needs pricing review?”";
+    return null;
+  }
+
+  private assistantIntent(question: string) {
+    const value = question.toLowerCase();
+    if (/\b(owner|guest).*(message|update|email)|\b(write|draft).*(owner|guest)/.test(value)) return "owner_message";
+    if (/\b(report|board update|executive summary)\b/.test(value)) return "report_draft";
+    if (/\b(compare|versus|vs\.?|difference between)\b/.test(value)) return "listing_comparison";
+    if (/\b(should i|what should|next action|decision|approve|execute|plan|rollback)\b/.test(value)) return "decision_plan";
+    if (/\b(event|weather|concert|festival|signal)\b/.test(value)) return "market_intelligence";
+    if (/\b(incident|risk|at risk|urgent)\b/.test(value)) return "risk_triage";
+    return "portfolio_analysis";
+  }
+
+  private assistantIntentInstruction(intent: string) {
+    const instructions: Record<string, string> = {
+      owner_message: "Draft a concise owner-ready update. Separate known facts, estimates, and a requested decision. Do not imply a rate was changed.",
+      report_draft: "Create a compact report draft with a headline, measured facts, estimates, priorities, and next steps.",
+      listing_comparison: "Compare only available listing facts in a small table or bullets. State any missing comparison field clearly.",
+      decision_plan: "Use the headings Recommendation, Evidence, Risks, Approval required, and Reversal/monitoring plan. Do not tell the user to execute automatically.",
+      market_intelligence: "Explain how signals provide context, identify affected listings/dates where supplied, and distinguish signals from measured revenue impact.",
+      risk_triage: "Rank the immediate risks by measured revenue at risk and confidence, then give the safest review sequence.",
+      portfolio_analysis: "Answer directly with measured facts first, then estimates, uncertainty, and the most useful next question or action.",
+    };
+    return instructions[intent] || instructions.portfolio_analysis;
+  }
+
+  private assistantCitations(intent: string, question: string, dashboard: any): AssistantCitation[] {
+    const citations: AssistantCitation[] = [];
+    const query = question.toLowerCase();
+    const incident = dashboard.incident;
+    const opportunity = (dashboard.opportunities || []).find((item: any) => query.includes(String(item.property || "").toLowerCase()));
+    if (opportunity?.listingId) citations.push({ label: opportunity.property || "Affected listing", href: `/dashboard/listings/${encodeURIComponent(opportunity.listingId)}`, description: "Listing workspace" });
+    if (incident && ["risk_triage", "decision_plan", "portfolio_analysis"].includes(intent)) citations.push({ label: incident.title || "Active incident", href: "/dashboard/incidents", description: "Incident evidence" });
+    if ((dashboard.opportunities || []).length && ["decision_plan", "portfolio_analysis", "listing_comparison"].includes(intent)) citations.push({ label: "Revenue opportunities", href: "/dashboard/opportunities", description: "Lifecycle and evidence" });
+    if ((dashboard.signals || []).length && intent === "market_intelligence") citations.push({ label: "Market intelligence", href: "/dashboard/market", description: "Event and weather context" });
+    if (intent === "report_draft" || intent === "owner_message") citations.push({ label: "Reports", href: "/dashboard/reports", description: "Generate or finalize a report" });
+    if (intent === "decision_plan") citations.push({ label: "Revenue War Room", href: "/dashboard/war-room", description: "Review and approve safely" });
+    return citations.filter((citation, index, list) => list.findIndex((item) => item.href === citation.href) === index).slice(0, 4);
   }
 
   async assistantHistory(actor: AuthenticatedUser) {
     if (!this.assistantMessages) return [];
     const rows = await this.assistantMessages.find({ organizationId: new Types.ObjectId(actor.organizationId), userId: new Types.ObjectId(actor.sub) }).sort({ createdAt: -1 }).limit(100).lean();
-    return rows.reverse().map((message: any) => ({ id: String(message._id), role: message.role, text: message.text, createdAt: message.createdAt, grounded: message.grounded }));
+    return rows.reverse().map((message: any) => ({ id: String(message._id), role: message.role, text: message.text, createdAt: message.createdAt, grounded: message.grounded, citations: message.citations || [], intent: message.intent }));
   }
 
   async clearAssistantHistory(actor: AuthenticatedUser) {

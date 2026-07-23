@@ -132,7 +132,7 @@ export default function SettingsPage() {
           <Zap size={15} /> Integrations & Mobile Bot
         </button>
         <button onClick={() => setActiveTab("workspace")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "workspace" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><ShieldCheck size={15}/> Organization</button>
-        {/* <button onClick={() => setActiveTab("team")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "team" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Team</button> */}
+        <button onClick={() => setActiveTab("team")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "team" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Team</button>
         <button onClick={() => setActiveTab("portfolios")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "portfolios" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Portfolios</button>
         <button onClick={() => setActiveTab("intelligence")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "intelligence" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Sparkles size={15}/> Intelligence</button>
         <button onClick={() => setActiveTab("notifications")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "notifications" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><MessageCircle size={15}/> Notifications</button>
@@ -263,7 +263,7 @@ export default function SettingsPage() {
       {activeTab === "notifications" && <NotificationPreferencesPanel canManageOrganization={canManageOrganization} />}
 
       {activeTab === "workspace" && (canManageOrganization ? <WorkspaceSettingsPanel /> : <PermissionNotice message="Only organization administrators can change organization settings." />)}
-      {/* {activeTab === "team" && (canManageOrganization ? <TeamSettingsPanel /> : <PermissionNotice message="Only organization administrators can invite or suspend members." />)} */}
+      {activeTab === "team" && (canManageOrganization ? <TeamSettingsPanel /> : <PermissionNotice message="Only organization administrators can invite or suspend members." />)}
 
       {/* Segments Tab */}
       {activeTab === "segments" && (

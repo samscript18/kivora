@@ -3,7 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { askKivora, clearAssistantHistory, getAssistantHistory, QUERY_KEYS } from "@/lib/api";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Send, User, Sparkles, HelpCircle, Trash2 } from "lucide-react";
+import { Bot, Send, User, Sparkles, HelpCircle, Trash2, ExternalLink, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import type { AssistantCitation } from "@/types/api";
 import { toast } from "sonner";
 import { RichText } from "@/components/ui/RichText";
 
@@ -11,6 +13,8 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   text: string;
+  citations?: AssistantCitation[];
+  intent?: string;
 }
 
 const messageId = () =>
@@ -23,7 +27,10 @@ const suggestedPrompts = [
   "Which listings need immediate pricing review?",
   "Show active demand signals for Nashville.",
   "Explain today's top recommended action.",
-  "Compare occupancy pace against market benchmarks."
+  "Compare occupancy pace against market benchmarks.",
+  "Hi Kivora — what can you help me with?",
+  "Create a safe decision plan for my biggest revenue risk.",
+  "Draft an owner update for the highest-impact opportunity."
 ];
 
 export default function AssistantPage() {
@@ -33,12 +40,12 @@ export default function AssistantPage() {
   const endRef = useRef<HTMLDivElement>(null);
   const historyQuery = useQuery({ queryKey: QUERY_KEYS.assistantHistory, queryFn: getAssistantHistory });
 
-  const messages: Message[] = useMemo(() => [...(historyQuery.data || []).map((message) => ({ id: message.id, role: message.role, text: message.text })), ...pendingMessages], [historyQuery.data, pendingMessages]);
+  const messages: Message[] = useMemo(() => [...(historyQuery.data || []).map((message) => ({ id: message.id, role: message.role, text: message.text, citations: message.citations, intent: message.intent })), ...pendingMessages], [historyQuery.data, pendingMessages]);
 
   const askMutation = useMutation({
     mutationFn: askKivora,
     onSuccess: async (result) => {
-      setPendingMessages((prev) => [...prev, { id: messageId(), role: "assistant", text: result.body }]);
+      setPendingMessages((prev) => [...prev, { id: messageId(), role: "assistant", text: result.body, citations: result.citations, intent: result.intent }]);
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.assistantHistory });
       setPendingMessages([]);
     },
@@ -77,7 +84,7 @@ export default function AssistantPage() {
             Ask Kivora AI
           </h2>
           <p className="mt-1 text-[12px] text-slate-400">
-            Natural-language answers grounded strictly in your latest live portfolio data.
+            Friendly conversation plus portfolio-grounded answers for operational questions.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400">Portfolio grounded</span>{messages.length > 0 && <button onClick={() => window.confirm("Clear your saved Kivora conversation?") && clearMutation.mutate()} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[10px] text-slate-400 hover:text-foreground"><Trash2 size={12}/> Clear chat</button>}</div>
@@ -110,7 +117,7 @@ export default function AssistantPage() {
               </span>
               <h3 className="font-bold text-sm text-foreground">Grounded AI Revenue Operations</h3>
               <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-                Ask about current incidents, revenue risks, strategy modeling, or owner briefs.
+                Start with a hello, or ask about current incidents, revenue risks, strategy modeling, or owner briefs.
               </p>
             </div>
           ) : (
@@ -134,6 +141,8 @@ export default function AssistantPage() {
                     }`}
                   >
                     {isUser ? <p className="whitespace-pre-wrap">{msg.text}</p> : <RichText text={msg.text} />}
+                    {!isUser && msg.intent === "decision_plan" && <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-2 text-[10px] text-amber-200"><ShieldCheck size={12}/> Decision plan only — review and explicitly approve any live action in Kivora.</div>}
+                    {!isUser && msg.citations?.length ? <div className="mt-3 flex flex-wrap gap-2 border-t border-white/5 pt-3">{msg.citations.map((citation) => <Link key={citation.href} href={citation.href} className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-[10px] font-semibold text-accent hover:bg-white/5"><ExternalLink size={11}/>{citation.label}</Link>)}</div> : null}
                   </div>
                   {isUser && (
                     <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-xl bg-white/5 text-slate-400 mt-0.5">
@@ -160,7 +169,7 @@ export default function AssistantPage() {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Ask Kivora about your live portfolio..."
+            placeholder="Ask Kivora a question, or just say hi..."
             className="min-w-0 flex-1 rounded-xl border border-border bg-elevated px-3 py-3 text-xs text-foreground placeholder-slate-500 outline-none focus:border-accent sm:px-4"
           />
           <button
