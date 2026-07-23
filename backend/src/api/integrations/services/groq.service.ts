@@ -32,7 +32,7 @@ export class GroqService {
     this.geminiModel = config.get<string>("GEMINI_MODEL", "gemini-2.0-flash");
     this.geminiBase = config.get<string>("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta");
     this.openRouterKey = config.get<string>("OPENROUTER_API_KEY");
-    this.openRouterModel = config.get<string>("OPENROUTER_MODEL", "google/gemini-2.0-flash-001");
+    this.openRouterModel = config.get<string>("OPENROUTER_MODEL", "mistralai/mistral-small-2603");
     this.openRouterBase = config.get<string>("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1");
   }
 

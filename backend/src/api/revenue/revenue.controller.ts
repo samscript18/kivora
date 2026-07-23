@@ -490,7 +490,10 @@ export class RevenueController {
         const message = error instanceof Error ? error.message.slice(0, 300) : "The action could not be completed";
         await this.telegram.acknowledgeCallback(String(callback.id), message.slice(0, 120)).catch(() => undefined);
         if (actor) await this.telegram.recordCallbackFailure(actor, chatId, error, intent || {});
-        await this.telegram.sendToChat(chatId, `⚠️ I couldn’t complete that action. ${message}\n\nFor an expired or already-used button, open the latest recommendation alert and choose Details & previews to generate fresh signed controls.`).catch(() => undefined);
+        const recovery = /Telegram action intent is expired|already used|belongs to another user/i.test(message)
+          ? "For an expired or already-used button, open the latest recommendation alert and choose Details & previews to generate fresh signed controls."
+          : "No pricing was changed. Review the message above, then open the recommendation in Kivora to refresh its live evidence before trying again.";
+        await this.telegram.sendToChat(chatId, `⚠️ I couldn’t complete that action. ${message}\n\n${recovery}`).catch(() => undefined);
         // Telegram has already received user feedback. Returning 200 prevents
         // delivery retries from replaying a single-use callback intent.
         return { ok: false };

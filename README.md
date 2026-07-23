@@ -140,7 +140,7 @@ docker compose --env-file frontend/.env.local up --build
 | `TICKETMASTER_API_KEY` | Platform-managed event intelligence. Organizations can override it with their own encrypted credential. |
 | `OPENWEATHER_API_KEY` | Platform-managed weather intelligence. Organizations can override it with their own encrypted credential. |
 | `GROQ_MODEL` | Optional model override; defaults to `llama-3.3-70b-versatile`. |
-| `GEMINI_MODEL` / `OPENROUTER_MODEL` | Optional fallback model overrides; defaults are `gemini-2.0-flash` and `google/gemini-2.0-flash-001`. |
+| `GEMINI_MODEL` / `OPENROUTER_MODEL` | Optional fallback model overrides; defaults are `gemini-2.0-flash` and `mistralai/mistral-small-2603`. |
 | `WHEELHOUSE_API_KEY` | Legacy migration input only. New integrations should be connected per organization in Kivora. |
 | `KIVORA_APPROVAL_TOKEN` | Optional supplemental approval token. It never bypasses Privy authentication or tenant binding. |
 

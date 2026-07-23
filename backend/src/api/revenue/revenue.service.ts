@@ -499,7 +499,10 @@ export class RevenueService {
       const horizonDays = Math.min(30, preview.data?.length ?? 0);
       return { ...option, available: true, projectedRevenue, projectedAdr: horizonDays ? Math.round(projectedRevenue / horizonDays) : 0, estimatedUplift: projectedRevenue - currentRevenue, horizonDays, source: "Wheelhouse live non-mutating preview" };
     }));
-    const expiresAt = new Date(Date.now() + 30 * 60_000);
+    // Telegram offers a Schedule +1 hour action. Keep the stored preview valid
+    // long enough for that declared workflow; the scheduler still rechecks the
+    // live preference state immediately before a pricing mutation.
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60_000);
     const serializedPreviews: any[] = [...previews];
     if (actor && this.simulations) {
       for (let index = 0; index < previews.length; index++) {
