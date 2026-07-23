@@ -11,8 +11,17 @@ jest.mock("../auth/guards/privy-auth.guard", () => ({ PrivyAuthGuard: class Priv
 describe("RevenueController", () => {
   let controller: RevenueController;
   const revenue = { capabilitiesFor: jest.fn(() => ({ wheelhouse: { connected: true } })), preview: jest.fn(() => ({ mutated: false, source: "Wheelhouse live preview" })), underwrite: jest.fn(() => ({ source: "Wheelhouse live market report" })) };
-  beforeEach(async () => { const module = await Test.createTestingModule({ controllers: [RevenueController], providers: [{ provide: RevenueService, useValue: revenue }, { provide: TelegramService, useValue: {} }, { provide: ConfigService, useValue: { get: jest.fn() } }, { provide: ApprovalGuard, useValue: { canActivate: () => true } }] }).compile(); controller = module.get(RevenueController); });
+  const telegram = { sendToChat: jest.fn(), sendChatAction: jest.fn(), linkedActor: jest.fn() };
+  const config = { get: jest.fn((key: string) => key === "TELEGRAM_WEBHOOK_SECRET" ? "test-secret" : undefined) };
+  beforeEach(async () => { jest.clearAllMocks(); const module = await Test.createTestingModule({ controllers: [RevenueController], providers: [{ provide: RevenueService, useValue: revenue }, { provide: TelegramService, useValue: telegram }, { provide: ConfigService, useValue: config }, { provide: ApprovalGuard, useValue: { canActivate: () => true } }] }).compile(); controller = module.get(RevenueController); });
   it("reports organization-scoped live capabilities", () => expect(controller.capabilities({} as any)).toEqual({ wheelhouse: { connected: true } }));
   it("uses a non-mutating live preview", async () => expect(await controller.preview("incident" )).toMatchObject({ mutated: false, source: "Wheelhouse live preview" }));
   it("delegates organization-scoped live underwriting", async () => expect(await controller.underwrite({ address: "1200 Brickell Bay Dr", marketId: 1, acquisitionCost: 500000, annualExpenses: 30000 }, {} as any)).toMatchObject({ source: "Wheelhouse live market report" }));
+  it("acknowledges a failed Telegram command instead of returning a retryable 5xx", async () => {
+    telegram.sendChatAction.mockResolvedValue({ sent: true });
+    telegram.linkedActor.mockRejectedValue(new Error("This Telegram account is not connected to Kivora"));
+    telegram.sendToChat.mockResolvedValue({ delivered: true });
+    await expect(controller.telegramWebhook("test-secret", { message: { text: "/briefing", chat: { id: 7 }, from: { id: 8 } } })).resolves.toEqual({ ok: false });
+    expect(telegram.sendToChat).toHaveBeenCalledWith("7", expect.stringContaining("not connected"));
+  });
 });

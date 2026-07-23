@@ -497,37 +497,52 @@ export class RevenueController {
       }
     }
 
-    if (message?.text === '/briefing' && message?.chat?.id && message?.from?.id) {
-      await this.telegram.sendChatAction(String(message.chat.id)).catch(() => undefined);
-      const actor = await this.telegram.linkedActor(String(message.chat.id), String(message.from.id));
-      const dashboard = await this.revenue.dashboard(actor as AuthenticatedUser);
-      return this.telegram.dailyBriefing(String(message.chat.id), dashboard.summary);
-    }
-    if (message?.text === '/opportunities' && message?.chat?.id && message?.from?.id) {
-      await this.telegram.sendChatAction(String(message.chat.id)).catch(() => undefined);
-      const actor = await this.telegram.linkedActor(String(message.chat.id), String(message.from.id));
-      const items = await this.revenue.getOpportunities(actor as AuthenticatedUser);
-      const text = items.length
-        ? items
-            .slice(0, 8)
-            .map(
-              (item, index) =>
-                `${index + 1}. ${item.property}\n${item.action}\nEstimated impact: $${item.impact.toLocaleString()} · ${item.confidence}% confidence`,
-            )
-            .join('\n\n')
-        : 'No live revenue opportunities are currently open.';
-      return this.telegram.sendToChat(String(message.chat.id), text);
-    }
-    if (message?.text === '/help' && message?.chat?.id)
-      return this.telegram.sendToChat(
-        String(message.chat.id),
-        'Kivora commands\n/briefing — portfolio summary\n/opportunities — ranked revenue opportunities\n\nOr ask a question about your live portfolio in natural language.',
-      );
-    if (typeof message?.text === 'string' && !message.text.startsWith('/') && message?.chat?.id && message?.from?.id) {
-      await this.telegram.sendChatAction(String(message.chat.id)).catch(() => undefined);
-      const actor = await this.telegram.linkedActor(String(message.chat.id), String(message.from.id));
-      const response = await this.revenue.ask(message.text.slice(0, 500), actor as AuthenticatedUser, 'telegram');
-      return this.telegram.sendToChat(String(message.chat.id), response.body.slice(0, 4000));
+    const messageChatId = message?.chat?.id ? String(message.chat.id) : undefined;
+    try {
+      if (message?.text === '/briefing' && messageChatId && message?.from?.id) {
+        await this.telegram.sendChatAction(messageChatId).catch(() => undefined);
+        const actor = await this.telegram.linkedActor(messageChatId, String(message.from.id));
+        const dashboard = await this.revenue.dashboard(actor as AuthenticatedUser);
+        return this.telegram.dailyBriefing(messageChatId, dashboard.summary);
+      }
+      if (message?.text === '/opportunities' && messageChatId && message?.from?.id) {
+        await this.telegram.sendChatAction(messageChatId).catch(() => undefined);
+        const actor = await this.telegram.linkedActor(messageChatId, String(message.from.id));
+        const items = await this.revenue.getOpportunities(actor as AuthenticatedUser);
+        const text = items.length
+          ? items
+              .slice(0, 8)
+              .map(
+                (item, index) =>
+                  `${index + 1}. ${item.property}\n${item.action}\nEstimated impact: $${item.impact.toLocaleString()} · ${item.confidence}% confidence`,
+              )
+              .join('\n\n')
+          : 'No live revenue opportunities are currently open.';
+        return this.telegram.sendToChat(messageChatId, text);
+      }
+      if (message?.text === '/help' && messageChatId)
+        return this.telegram.sendToChat(
+          messageChatId,
+          'Kivora commands\n/briefing — portfolio summary\n/opportunities — ranked revenue opportunities\n\nOr ask a question about your live portfolio in natural language.',
+        );
+      if (typeof message?.text === 'string' && !message.text.startsWith('/') && messageChatId && message?.from?.id) {
+        await this.telegram.sendChatAction(messageChatId).catch(() => undefined);
+        const actor = await this.telegram.linkedActor(messageChatId, String(message.from.id));
+        const response = await this.revenue.ask(message.text.slice(0, 500), actor as AuthenticatedUser, 'telegram');
+        return this.telegram.sendToChat(messageChatId, response.body.slice(0, 4000));
+      }
+    } catch (error) {
+      // Telegram retries every non-2xx webhook response. A failed provider
+      // lookup or a stale account link must not trap all later user messages in
+      // Telegram's queue. Reply when possible and acknowledge the update.
+      const detail = error instanceof Error ? error.message.slice(0, 220) : 'The request could not be completed';
+      if (messageChatId) {
+        await this.telegram.sendToChat(
+          messageChatId,
+          `⚠️ I couldn’t complete that request. ${detail}\n\nIf this chat was recently reconnected, open Kivora Settings → Telegram and reconnect it, then try again.`,
+        ).catch(() => undefined);
+      }
+      return { ok: false };
     }
     return { ok: true };
   }
