@@ -11,6 +11,7 @@ import {
   downloadReport,
   finalizeReport,
   deliverReport,
+  getCapabilities,
 } from "@/lib/api";
 import { useState } from "react";
 import { FileBarChart, Send, Copy, FileText, Plus, Download } from "lucide-react";
@@ -40,6 +41,9 @@ export default function ReportsPage() {
     queryKey: QUERY_KEYS.portfolio,
     queryFn: getPortfolio,
   });
+  const capabilitiesQuery=useQuery({queryKey:QUERY_KEYS.capabilities,queryFn:getCapabilities});
+  const canAnalyze=capabilitiesQuery.data?.permissions?.canAnalyze===true;
+  const canManageRevenue=capabilitiesQuery.data?.permissions?.canManageRevenue===true;
 
   const generateReportMutation = useMutation({
     mutationFn: () => generateReport({ type: reportType, listingId: selectedListingId || undefined }),
@@ -147,7 +151,7 @@ export default function ReportsPage() {
 
               <div className="flex items-end sm:col-span-1">
                 <button
-                  disabled={generateReportMutation.isPending || (reportType === "owner" && !selectedListingId)}
+          disabled={!canAnalyze || generateReportMutation.isPending || (reportType === "owner" && !selectedListingId)}
                   onClick={() => generateReportMutation.mutate()}
                   className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent py-3 text-xs font-bold text-white hover:bg-accent/90 disabled:opacity-40 transition-colors"
                 >
@@ -184,7 +188,7 @@ export default function ReportsPage() {
                     </span>
                   </div>
                   <div className="rounded-2xl border border-white/[0.05] bg-black/20 p-5"><RichText text={readableReportBody(item)}/></div>
-                  <div className="flex flex-wrap items-center gap-2 border-t border-white/5 pt-4"><div className="mr-auto text-[9px] font-mono uppercase tracking-[0.12em] text-slate-500">Live portfolio evidence · {item.currency || "USD"}</div>{item.status === "draft" && <button onClick={() => finalizeMutation.mutate(item._id)} className="rounded-lg bg-accent px-3 py-2 text-[10px] font-semibold text-white">Finalize</button>}{["ready", "shared"].includes(item.status) && <button onClick={()=>deliverMutation.mutate(item._id)} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/20 px-3 py-2 text-[10px] text-emerald-300"><Send size={12}/> Deliver</button>}<button onClick={() => downloadReport(item._id, "pdf").catch((error) => toast.error(error instanceof Error ? error.message : "PDF download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border bg-white/[0.02] px-3 py-2 text-[10px] font-semibold"><Download size={12}/> Styled PDF</button><button onClick={() => downloadReport(item._id, "csv").catch((error) => toast.error(error instanceof Error ? error.message : "CSV download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border bg-white/[0.02] px-3 py-2 text-[10px] font-semibold"><Download size={12}/> Detailed CSV</button></div>
+                  <div className="flex flex-wrap items-center gap-2 border-t border-white/5 pt-4"><div className="mr-auto text-[9px] font-mono uppercase tracking-[0.12em] text-slate-500">Live portfolio evidence · {item.currency || "USD"}</div>{canManageRevenue&&item.status === "draft" && <button onClick={() => finalizeMutation.mutate(item._id)} className="rounded-lg bg-accent px-3 py-2 text-[10px] font-semibold text-white">Finalize</button>}{canManageRevenue&&["ready", "shared"].includes(item.status) && <button onClick={()=>deliverMutation.mutate(item._id)} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/20 px-3 py-2 text-[10px] text-emerald-300"><Send size={12}/> Deliver</button>}<button onClick={() => downloadReport(item._id, "pdf").catch((error) => toast.error(error instanceof Error ? error.message : "PDF download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border bg-white/[0.02] px-3 py-2 text-[10px] font-semibold"><Download size={12}/> Styled PDF</button><button onClick={() => downloadReport(item._id, "csv").catch((error) => toast.error(error instanceof Error ? error.message : "CSV download failed"))} className="inline-flex items-center gap-1 rounded-lg border border-border bg-white/[0.02] px-3 py-2 text-[10px] font-semibold"><Download size={12}/> Detailed CSV</button></div>
                   </div>
                 </article>
               ))}
@@ -239,7 +243,7 @@ export default function ReportsPage() {
                       <Copy size={13} /> Copy Text
                     </button>
                     <button
-                      disabled={sendBriefMutation.isPending || item.status === "sent"}
+                      disabled={!canManageRevenue || sendBriefMutation.isPending || item.status === "sent"}
                       onClick={() => sendBriefMutation.mutate(item._id)}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-xs font-bold text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
                     >

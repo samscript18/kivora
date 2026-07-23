@@ -3,15 +3,8 @@ export type Envelope<T> = { success: true; data: T };
 
 // ─── Shared primitives ───────────────────────────────────────────────────────
 export type IncidentSeverity = "critical" | "high" | "medium" | "low";
-export type OpportunityStatus =
-  | "open"
-  | "under_review"
-  | "awaiting_approval"
-  | "scheduled"
-  | "applied"
-  | "dismissed"
-  | "expired"
-  | "failed";
+export type OpportunityStatus = string;
+export type RecommendationLifecycleStatus = "DRAFT" | "READY" | "REVIEWED" | "APPROVED" | "SCHEDULED" | "EXECUTING" | "APPLIED" | "VERIFYING" | "VERIFIED" | "MEASURING" | "COMPLETED" | "IGNORED" | "DISMISSED" | "EXPIRED" | "CANCELLED" | "FAILED" | "PARTIALLY_APPLIED" | "REVERTED" | "ROLLBACK_FAILED";
 export type ActionStatus =
   | "suggested"
   | "awaiting_approval"
@@ -72,14 +65,18 @@ export interface ListingLocation {
   city?: string;
   state?: string;
   country?: string;
+  postal_code?: string;
   lat?: number;
   lng?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface ListingMetrics {
   health: number;
   revenue: number;
   occupancy: number;
+  forwardOccupancy?: number;
   adr: number;
   revpar: number;
   pickup?: string;
@@ -97,8 +94,78 @@ export interface Listing {
   metrics?: ListingMetrics;
   thumbnail?: string;
   bedrooms?: number;
+  beds?: number;
+  bathrooms?: number;
   propertyType?: string;
+  roomType?: string;
+  currency?: string;
+  ownerName?: string;
+  starRating?: number;
+  reviewCount?: number;
+  photoCount?: number;
+  minimumStay?: number;
+  amenities?: string[];
   lastSynced?: string;
+}
+
+export interface WheelhouseMonthlyKpi {
+  month: string;
+  adr?: number;
+  lead_time?: number;
+  occupancy?: number;
+  occupancy_adjusted?: number;
+  revpar?: number;
+  revenue?: number;
+  los?: number;
+  comp_set_adr?: number;
+  comp_set_lead_time?: number;
+  comp_set_occupancy?: number;
+  comp_set_revpar?: number;
+  comp_set_revenue?: number;
+  comp_set_los?: number;
+}
+
+export interface WheelhouseReservation {
+  id: string;
+  status?: string;
+  start_date: string;
+  end_date: string;
+  booked_at?: string;
+  num_guests?: number;
+  currency?: string;
+  total_price?: number;
+  nightly_subtotal?: number;
+  confirmation_code?: string;
+  source_name?: string;
+}
+
+export interface ListingWorkspace {
+  listing: Record<string, any> & {
+    id: string;
+    name: string;
+    channel: string;
+    currency?: string;
+    flags?: Array<{ name: string; description?: string }>;
+    portfolio?: { id: string; name: string; timezone?: string; currency?: string } | null;
+    connection?: { id: string; displayName: string; status: string; readCapability?: boolean; writeCapability?: boolean };
+  };
+  performance: {
+    current: Record<string, any> | null;
+    history: Array<Record<string, any>>;
+    rolling?: Record<string, Record<string, number> | number | null> | null;
+    monthly?: { currency?: string; data: WheelhouseMonthlyKpi[] } | null;
+  };
+  pricing: Record<string, any> & {
+    pricingTier?: { name: string; horizon: number } | null;
+    neighborhood?: { currency?: string; data: Array<{ stay_date: string; median_price: number; low_price: number; high_price: number; listings_count: number }> } | null;
+    neighborhoodOccupancy?: { data: Array<{ stay_date: string; occupancy: number; adjusted_occupancy: number; expected_bookings: number; observed_bookings: number }> } | null;
+    basePriceHistory?: Array<Record<string, any>> | null;
+    monthlySeasonality?: Record<"CON" | "REC" | "AGG", Record<string, number>> | null;
+  };
+  intelligence: Record<string, Array<Record<string, any>>>;
+  operations: Record<string, Array<Record<string, any>>> & { reservations: WheelhouseReservation[] };
+  capabilities: Record<string, any>;
+  liveData?: { fetchedAt: string; available: string[]; unavailable: string[]; reservationWindow: { startDate: string; endDate: string } };
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
@@ -163,6 +230,20 @@ export interface ActivityEntry {
   result?: string;
 }
 
+export interface NotificationItem {
+  id?: string;
+  _id?: string;
+  type: string;
+  title?: string;
+  message?: string;
+  severity?: string;
+  status: string;
+  readAt?: string;
+  createdAt?: string;
+  deliveredAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface DashboardData {
   source: string;
   capabilities: Capabilities;
@@ -212,6 +293,8 @@ export interface Opportunity {
   tag?: string;
   canPreview?: boolean;
   status?: OpportunityStatus;
+  opportunityStatus?: string;
+  lifecycleStatus?: RecommendationLifecycleStatus | string;
   category?: string;
   discoveredAt?: string;
   expiresAt?: string;
@@ -230,11 +313,14 @@ export interface MarketSignal {
   description?: string;
   confidence: number;
   affectedListings: number;
+  listingIds?: string[];
   demandDirection?: "up" | "down" | "neutral";
   startDate?: string;
   endDate?: string;
   severity?: string;
   source?: string;
+  sourceUrl?: string;
+  evidence?: Record<string, unknown>;
 }
 
 // ─── Strategy simulator ──────────────────────────────────────────────────────
@@ -268,6 +354,7 @@ export interface PersistedSimulation {
 export interface WorkItem {
   kind: "incident" | "opportunity"; entity: Record<string, any>; recommendation: Recommendation | null;
   simulations: PersistedSimulation[]; actions: Array<Record<string, any>>; outcomes: Array<Record<string, any>>;
+  selectedSimulation?: PersistedSimulation | null; intendedStrategy?: string;
   activity: ActivityEntry[]; comments: Array<Record<string, any>>; signals: Array<Record<string, any>>;
   capabilities?: {canApprove:boolean;canExecute:boolean;simulationFresh:boolean;recommendationFresh:boolean;writeAccess:string};
 }
@@ -382,6 +469,7 @@ export interface Capabilities {
     writeAccess: "read_only" | "unverified" | "verified";
     lastError?: number | null;
   };
+  permissions?: { canManageOrganization: boolean; canManageRevenue: boolean; canAnalyze: boolean };
   marketIntelligence?: {
     ticketmaster: { configured: boolean; mode: "live" | "disabled" };
     openweather: { configured: boolean; mode: "live" | "disabled" };

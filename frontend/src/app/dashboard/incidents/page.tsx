@@ -137,7 +137,7 @@ export default function IncidentsPage() {
         </div>
       )}
 
-      {selectedIncident && <WorkItemWorkspace kind="incident" id={selectedIncident.id} onClose={() => setSelectedIncident(null)} />}
+      {selectedIncident && <WorkItemWorkspace key={`incident:${selectedIncident.id}`} kind="incident" id={selectedIncident.id} onClose={() => setSelectedIncident(null)} />}
     </div>
   );
 }

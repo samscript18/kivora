@@ -1,18 +1,21 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { getActivity, QUERY_KEYS } from "@/lib/api";
-import { Activity as ActivityIcon, ShieldCheck } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getActivity, getNotifications, readNotification, QUERY_KEYS } from "@/lib/api";
+import { Activity as ActivityIcon, Bell, Check, ShieldCheck } from "lucide-react";
 import { SourceBadge } from "@/components/ui/SourceBadge";
 import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { SkeletonRow } from "@/components/ui/Skeleton";
 import type { ActivityEntry } from "@/types/api";
 
 export default function ActivityPage() {
+  const queryClient=useQueryClient();
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: QUERY_KEYS.activity,
     queryFn: getActivity,
   });
+  const notifications=useQuery({queryKey:QUERY_KEYS.notifications,queryFn:getNotifications});
+  const markRead=useMutation({mutationFn:readNotification,onSuccess:()=>queryClient.invalidateQueries({queryKey:QUERY_KEYS.notifications})});
 
   const activities: ActivityEntry[] = data ?? [];
 
@@ -31,6 +34,8 @@ export default function ActivityPage() {
         </div>
         <SourceBadge source="kivora" />
       </div>
+
+      {notifications.data?.length ? <section className="card overflow-hidden rounded-2xl"><div className="flex items-center gap-2 border-b border-white/5 px-4 py-3"><Bell size={14} className="text-accent"/><h3 className="text-xs font-semibold">Notifications</h3><span className="ml-auto font-mono text-[9px] text-slate-500">{notifications.data.filter(item=>!item.readAt).length} unread</span></div><div className="divide-y divide-white/5">{notifications.data.map(item=>{const notificationId=item.id||item._id||"";return <div key={notificationId} className={`flex gap-3 p-4 ${item.readAt?"opacity-60":"bg-accent/[.025]"}`}><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.readAt?"bg-slate-700":"bg-accent"}`}/><div className="min-w-0 flex-1"><div className="text-xs font-semibold">{item.title||String(item.type).replaceAll("_"," ")}</div>{item.message&&<p className="mt-1 text-[10px] leading-5 text-slate-400">{item.message}</p>}<div className="mt-1 font-mono text-[9px] text-slate-600">{item.createdAt?new Date(item.createdAt).toLocaleString():""}</div></div>{!item.readAt&&<button disabled={markRead.isPending} onClick={()=>markRead.mutate(notificationId)} className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2 text-[9px]"><Check size={11}/> Read</button>}</div>})}</div></section>:null}
 
       {/* Activity List */}
       {error ? (

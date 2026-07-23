@@ -2,7 +2,7 @@
 import { Bell, LogOut, Menu, Search } from "lucide-react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getDashboard, QUERY_KEYS } from "@/lib/api";
+import { getDashboard, getNotifications, QUERY_KEYS } from "@/lib/api";
 import { SyncStatus } from "@/components/ui/SyncStatus";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -39,7 +39,8 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
 
   const page = pageTitles[pathname] ?? { title: "Kivora", subtitle: "Revenue operations platform" };
   const lastSynced = dataUpdatedAt ? new Date(dataUpdatedAt).toISOString() : undefined;
-  const criticalCount = data?.summary.criticalIncidents ?? 0;
+  const notifications = useQuery({ queryKey: QUERY_KEYS.notifications, queryFn: getNotifications, staleTime: 30_000, refetchInterval: 60_000 });
+  const unreadCount = notifications.data?.filter((item) => !item.readAt).length ?? 0;
   const initials = (user?.email?.address ?? "U").slice(0, 1).toUpperCase();
   const handleLogout = async () => {
     await logout();
@@ -94,12 +95,12 @@ export function TopBar({ onMenuOpen }: TopBarProps) {
         <Link
           href="/dashboard/activity"
           className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/[0.08] bg-white/[0.02] text-slate-400 transition hover:border-accent/25 hover:bg-accent/[0.06] hover:text-white"
-          aria-label={`Open activity and notifications. ${criticalCount} critical incidents`}
+          aria-label={`Open notifications. ${unreadCount} unread`}
         >
           <Bell size={15} />
-          {criticalCount > 0 && (
+          {unreadCount > 0 && (
             <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white">
-              {criticalCount > 9 ? "9+" : criticalCount}
+              {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
         </Link>

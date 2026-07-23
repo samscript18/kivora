@@ -3,14 +3,19 @@ services:
     image: mongo:8
     restart: unless-stopped
     volumes: ["kivora_mongo:/data/db"]
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports: ["6379:6379"]
   backend:
     build: ./backend
     env_file: ./backend/.env.local
     environment:
       HOST: 0.0.0.0
       MONGODB_URI: mongodb://mongo:27017/kivora
+      REDIS_URL: redis://redis:6379
     ports: ["4000:4000"]
-    depends_on: [mongo]
+    depends_on: [mongo, redis]
   frontend:
     build:
       context: ./frontend

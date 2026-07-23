@@ -98,6 +98,9 @@ export default function SettingsPage() {
   const capabilities = capabilitiesQuery.data;
   const eventIntelligence = capabilities?.marketIntelligence?.ticketmaster;
   const weatherIntelligence = capabilities?.marketIntelligence?.openweather;
+  const canManageOrganization = Boolean(capabilities?.permissions?.canManageOrganization);
+  const canManageRevenue = Boolean(capabilities?.permissions?.canManageRevenue);
+  const canAnalyze = Boolean(capabilities?.permissions?.canAnalyze);
   const segments: PortfolioSegment[] = segmentsQuery.data?.segments ?? [];
 
   const isValidUnderwrite = address && Number(marketId) > 0 && Number(cost) > 0 && Number(expenses) >= 0;
@@ -129,7 +132,7 @@ export default function SettingsPage() {
           <Zap size={15} /> Integrations & Mobile Bot
         </button>
         <button onClick={() => setActiveTab("workspace")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "workspace" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><ShieldCheck size={15}/> Organization</button>
-        <button onClick={() => setActiveTab("team")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "team" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Team</button>
+        {/* <button onClick={() => setActiveTab("team")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "team" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Team</button> */}
         <button onClick={() => setActiveTab("portfolios")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "portfolios" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Building2 size={15}/> Portfolios</button>
         <button onClick={() => setActiveTab("intelligence")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "intelligence" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><Sparkles size={15}/> Intelligence</button>
         <button onClick={() => setActiveTab("notifications")} className={`flex shrink-0 items-center gap-2 py-3 border-b-2 transition-colors ${activeTab === "notifications" ? "border-accent text-accent" : "border-transparent text-slate-400 hover:text-foreground"}`}><MessageCircle size={15}/> Notifications</button>
@@ -154,7 +157,7 @@ export default function SettingsPage() {
       {/* Integrations Tab */}
       {activeTab === "integrations" && (
         <div className="grid gap-4 md:grid-cols-2">
-          <WheelhouseConnectionsPanel />
+          {canManageRevenue ? <WheelhouseConnectionsPanel /> : <PermissionNotice message="A revenue manager or organization administrator manages Wheelhouse connections." />}
           {/* Telegram Mobile Companion */}
           <article className="card space-y-4 rounded-2xl p-4 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -255,12 +258,12 @@ export default function SettingsPage() {
           </article>
         </div>
       )}
-      {activeTab === "portfolios" && <PortfolioSettingsPanel />}
-      {activeTab === "intelligence" && <ExternalIntelligencePanel />}
-      {activeTab === "notifications" && <NotificationPreferencesPanel />}
+      {activeTab === "portfolios" && (canManageRevenue ? <PortfolioSettingsPanel /> : <PermissionNotice message="A revenue manager or organization administrator manages portfolios." />)}
+      {activeTab === "intelligence" && (canManageOrganization ? <ExternalIntelligencePanel /> : <PermissionNotice message="Only organization administrators can change external intelligence credentials and thresholds." />)}
+      {activeTab === "notifications" && <NotificationPreferencesPanel canManageOrganization={canManageOrganization} />}
 
-      {activeTab === "workspace" && <WorkspaceSettingsPanel />}
-      {activeTab === "team" && <TeamSettingsPanel />}
+      {activeTab === "workspace" && (canManageOrganization ? <WorkspaceSettingsPanel /> : <PermissionNotice message="Only organization administrators can change organization settings." />)}
+      {/* {activeTab === "team" && (canManageOrganization ? <TeamSettingsPanel /> : <PermissionNotice message="Only organization administrators can invite or suspend members." />)} */}
 
       {/* Segments Tab */}
       {activeTab === "segments" && (
@@ -345,7 +348,7 @@ export default function SettingsPage() {
           </div>
 
           <button
-            disabled={!isValidUnderwrite || underwriteMutation.isPending}
+            disabled={!canAnalyze || !isValidUnderwrite || underwriteMutation.isPending}
             onClick={() =>
               underwriteMutation.mutate({
                 address,
@@ -401,4 +404,8 @@ export default function SettingsPage() {
       />
     </div>
   );
+}
+
+function PermissionNotice({ message }: { message: string }) {
+  return <div className="card rounded-2xl border border-amber-500/15 p-5 text-xs text-amber-200">{message}</div>;
 }

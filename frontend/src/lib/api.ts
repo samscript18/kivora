@@ -26,6 +26,8 @@ import type {
   WorkItem,
   ManagedPortfolio,
   AssistantMessage,
+  ListingWorkspace,
+  NotificationItem,
 } from "@/types/api";
 
 // ─── Query keys ──────────────────────────────────────────────────────────────
@@ -45,7 +47,9 @@ export const QUERY_KEYS = {
   wheelhouseConnections: ["wheelhouse-connections"] as const,
   members: ["organization-members"] as const,
   assistantHistory: ["assistant-history"] as const,
+  notifications: ["notifications"] as const,
   strategies: (listingId: string) => ["strategies", listingId] as const,
+  listingWorkspace: (listingId: string) => ["listing-workspace", listingId] as const,
 } as const;
 
 // ─── Envelope ────────────────────────────────────────────────────────────────
@@ -136,7 +140,7 @@ const normalizeActivity = (item: ActivityWire, index: number): ActivityEntry => 
 
 // ─── API functions ────────────────────────────────────────────────────────────
 export const getDashboard = async () => {
-  const data = await unwrap(api.get<Envelope<DashboardData>>("/dashboard"));
+  const data = await unwrap(api.get<Envelope<DashboardData>>("/dashboard", { timeout: 120_000 }));
   return {
     ...data,
     activity: (data.activity as ActivityWire[]).map(normalizeActivity),
@@ -144,14 +148,19 @@ export const getDashboard = async () => {
 };
 
 export const getPortfolio = () =>
-  unwrap(api.get<Envelope<PortfolioData>>("/portfolio"));
-export const getListingWorkspace=(id:string)=>unwrap(api.get<Envelope<Record<string,any>>>(`/listings/${encodeURIComponent(id)}/workspace`));
+  unwrap(api.get<Envelope<PortfolioData>>("/portfolio", { timeout: 120_000 }));
+export const getListingWorkspace=(id:string)=>unwrap(api.get<Envelope<ListingWorkspace>>(`/listings/${encodeURIComponent(id)}/workspace`, { timeout: 120_000 }));
 export const getIntegrationSettings=()=>unwrap(api.get<Envelope<Array<Record<string,any>>>>("/integration-settings"));
 export const updateIntegrationSettings=(provider:string,input:Record<string,unknown>)=>unwrap(api.patch<Envelope<Record<string,any>>>(`/integration-settings/${provider}`,input));
 export const testIntegrationSettings=(provider:string)=>unwrap(api.post<Envelope<Record<string,any>>>(`/integration-settings/${provider}/test`));
 export const revokeIntegrationCredential=(provider:string)=>unwrap(api.delete<Envelope<Record<string,any>>>(`/integration-settings/${provider}/credential`));
 export const getNotificationPreferences=()=>unwrap(api.get<Envelope<Record<string,any>>>("/integration-settings/notifications/preferences"));
 export const saveNotificationPreferences=(scope:"organization"|"user"|"portfolio",input:Record<string,unknown>)=>unwrap(api.patch<Envelope<Record<string,any>>>(`/integration-settings/notifications/preferences/${scope}`,input));
+
+export const enableMarketIntelligence = () => Promise.all([
+  updateIntegrationSettings("ticketmaster", { enabled: true, credentialMode: "platform", settings: {} }),
+  updateIntegrationSettings("openweather", { enabled: true, credentialMode: "platform", settings: {} }),
+]);
 
 export const getIncidents = () =>
   unwrap(api.get<Envelope<Incident[]>>("/incidents"));
@@ -164,6 +173,8 @@ export const getBriefs = () =>
 
 export const getCapabilities = () =>
   unwrap(api.get<Envelope<Capabilities>>("/capabilities"));
+export const getNotifications = () => unwrap(api.get<Envelope<NotificationItem[]>>("/notifications"));
+export const readNotification = (id:string) => unwrap(api.post<Envelope<NotificationItem>>(`/notifications/${encodeURIComponent(id)}/read`));
 
 export const previewIncident = (id: string) =>
   unwrap(api.post<Envelope<PreviewResult>>(`/incidents/${id}/preview`));

@@ -82,6 +82,7 @@ export function Sidebar({ mobile, onClose }: SidebarProps) {
   const selectedOrganizationId = typeof window === "undefined" ? "" : window.localStorage.getItem(ORGANIZATION_STORAGE_KEY) || organizations[0]?.id || "";
   const criticalIncidents = data?.summary.criticalIncidents ?? 0;
   const opportunities     = data?.summary.opportunities ?? 0;
+  const connection = connectionStatus(data?.capabilities?.wheelhouse);
 
   const badgeCount: Record<string, number> = {
     incidents:     criticalIncidents,
@@ -130,9 +131,9 @@ export function Sidebar({ mobile, onClose }: SidebarProps) {
         )}
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Portfolio</span>
-          <span className={`flex items-center gap-1 text-[9px] font-bold ${data ? "text-emerald-500" : "text-slate-600"}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${data ? "bg-emerald-500 live-dot" : "bg-slate-600"}`} />
-            {data ? "Connected" : "—"}
+          <span className={`flex items-center gap-1 text-[9px] font-bold ${connection.tone}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${connection.dot}`} />
+            {connection.label}
           </span>
         </div>
         <p className="mt-1 text-[11px] font-semibold text-foreground truncate">
@@ -140,7 +141,7 @@ export function Sidebar({ mobile, onClose }: SidebarProps) {
         </p>
         {data && (
           <p className="mt-0.5 text-[9px] text-slate-500">
-            {data.capabilities?.wheelhouse?.connected ? "Pricing intelligence connected" : "Partially connected"}
+            {connection.detail}
           </p>
         )}
       </div>
@@ -208,4 +209,14 @@ export function Sidebar({ mobile, onClose }: SidebarProps) {
       </div>
     </aside>
   );
+}
+
+function connectionStatus(capability: { configured?: boolean; connected?: boolean; writeAccess?: string; lastError?: number | null } | undefined) {
+  if (!capability) return { label: "Checking", detail: "Verifying Wheelhouse connection…", tone: "text-slate-500", dot: "bg-slate-600" };
+  if (!capability.configured) return { label: "Not configured", detail: "Add a Wheelhouse API key in Settings", tone: "text-slate-500", dot: "bg-slate-600" };
+  if (capability.connected && capability.writeAccess === "verified") return { label: "Fully connected", detail: "Live pricing reads and writes verified", tone: "text-emerald-500", dot: "bg-emerald-500 live-dot" };
+  if (capability.connected && capability.writeAccess === "read_only") return { label: "Connected", detail: "Live reads connected · API key is read-only", tone: "text-emerald-500", dot: "bg-emerald-500 live-dot" };
+  if (capability.connected) return { label: "Connected", detail: "Live reads connected · writes not yet verified", tone: "text-emerald-500", dot: "bg-emerald-500 live-dot" };
+  if (capability.lastError === 429) return { label: "Rate limited", detail: "Wheelhouse is temporarily throttling reads", tone: "text-amber-400", dot: "bg-amber-400" };
+  return { label: "Needs attention", detail: "Test the Wheelhouse connection in Settings", tone: "text-amber-400", dot: "bg-amber-400" };
 }

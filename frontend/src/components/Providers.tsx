@@ -4,7 +4,7 @@ import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
-import { setAccessTokenProvider, setOrganizationIdProvider, syncUser } from "@/lib/api";
+import { ApiRequestError, setAccessTokenProvider, setOrganizationIdProvider, syncUser } from "@/lib/api";
 
 const ORGANIZATION_STORAGE_KEY = "kivora.organizationId";
 
@@ -22,7 +22,15 @@ function AuthBridge({ children }: { children: React.ReactNode }) {
 		if (!ready || !authenticated || !user) return;
 		const email = user.email?.address;
 		const name = email?.split("@")[0];
-		syncUser({ email, name })
+		const synchronize = () => syncUser({ email, name });
+		synchronize()
+			.catch((error) => {
+				if (error instanceof ApiRequestError && error.status === 403 && window.localStorage.getItem(ORGANIZATION_STORAGE_KEY)) {
+					window.localStorage.removeItem(ORGANIZATION_STORAGE_KEY);
+					return synchronize();
+				}
+				throw error;
+			})
 			.then((synced) => {
 				if (!window.localStorage.getItem(ORGANIZATION_STORAGE_KEY) && synced.organizationId) {
 					window.localStorage.setItem(ORGANIZATION_STORAGE_KEY, synced.organizationId);

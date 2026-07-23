@@ -32,12 +32,13 @@ export default function SimulatorPage() {
     queryFn: getCapabilities,
     staleTime: 60_000,
   });
-  const canWrite = capabilitiesQuery.data?.wheelhouse.writeActions === true;
+  const canAnalyze = capabilitiesQuery.data?.permissions?.canAnalyze === true;
+  const canWrite = capabilitiesQuery.data?.wheelhouse.writeActions === true && capabilitiesQuery.data?.permissions?.canManageRevenue === true;
 
   const strategiesQuery = useQuery({
     queryKey: QUERY_KEYS.strategies(selectedListingId),
     queryFn: () => getStrategies(selectedListingId),
-    enabled: Boolean(selectedListingId),
+    enabled: Boolean(selectedListingId) && canAnalyze,
   });
 
   const applyMutation = useMutation({
@@ -95,7 +96,9 @@ export default function SimulatorPage() {
       </div>
 
       {/* Results */}
-      {!selectedListingId ? (
+      {!canAnalyze && !capabilitiesQuery.isLoading ? (
+        <div className="card rounded-2xl border border-amber-500/15 p-5 text-xs text-amber-200">Analyst permission is required to run live strategy previews.</div>
+      ) : !selectedListingId ? (
         <div className="card rounded-2xl">
           <EmptyState
             icon={Zap}

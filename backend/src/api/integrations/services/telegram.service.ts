@@ -135,6 +135,18 @@ export class TelegramService {
     return { delivered: true };
   }
 
+  async acknowledgeCallback(callbackQueryId: string, text = "Working on it…") {
+    const token = this.requireToken();
+    await firstValueFrom(this.http.post(`${this.apiBase}/bot${token}/answerCallbackQuery`, { callback_query_id: callbackQueryId, text, show_alert: false }));
+    return { acknowledged: true };
+  }
+
+  async sendChatAction(chatId: string, action: "typing" | "upload_document" = "typing") {
+    const token = this.requireToken();
+    await firstValueFrom(this.http.post(`${this.apiBase}/bot${token}/sendChatAction`, { chat_id: chatId, action }));
+    return { sent: true };
+  }
+
   async sendToUser(userId: string, text: string, organizationId?: string) {
     const connection = await this.connections.findOne({ ...(organizationId ? { organizationId: new Types.ObjectId(organizationId) } : {}), userId: new Types.ObjectId(userId), enabled: true }).lean();
     if (!connection) throw new NotFoundException("Connect Telegram before sending this message");

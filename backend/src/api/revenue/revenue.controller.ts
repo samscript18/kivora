@@ -24,6 +24,7 @@ import {
   TransitionRecommendationDto,
 } from './dto/operations.dto';
 import { RevenueService } from './revenue.service';
+import { recommendedPricingStrategy } from './scheduled-action';
 
 @Controller()
 export class RevenueController {
@@ -32,8 +33,8 @@ export class RevenueController {
     private readonly telegram: TelegramService,
     private readonly config: ConfigService,
   ) {}
-  @Get('capabilities') capabilities() {
-    return this.revenue.capabilities();
+  @Get('capabilities') @UseGuards(PrivyAuthGuard) capabilities(@CurrentUser() user: AuthenticatedUser) {
+    return this.revenue.capabilitiesFor(user);
   }
   @Get('dashboard') @UseGuards(PrivyAuthGuard) dashboard(@CurrentUser() user: AuthenticatedUser) {
     return this.revenue.dashboard(user);
@@ -45,7 +46,7 @@ export class RevenueController {
     @Param('id') id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.revenue.listingWorkspace(id, user);
+    return this.revenue.listingWorkspaceDepth(id, user);
   }
   @Get('incidents') @UseGuards(PrivyAuthGuard) incidents(@CurrentUser() user: AuthenticatedUser) {
     return this.revenue.getIncidents(user);
@@ -65,8 +66,8 @@ export class RevenueController {
   @Post('scan') @UseGuards(ApprovalGuard) scan(@CurrentUser() user: AuthenticatedUser) {
     return this.revenue.scanPortfolio(user);
   }
-  @Post('underwrite') @UseGuards(PrivyAuthGuard) underwrite(@Body() body: UnderwriteDto) {
-    return this.revenue.underwrite(body.address, body.marketId, body.acquisitionCost, body.annualExpenses);
+  @Post('underwrite') @UseGuards(PrivyAuthGuard) underwrite(@Body() body: UnderwriteDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.revenue.underwrite(body.address, body.marketId, body.acquisitionCost, body.annualExpenses, user);
   }
   @Post('incidents/:id/preview') @UseGuards(PrivyAuthGuard) preview(
     @Param('id') id: string,
@@ -301,13 +302,16 @@ export class RevenueController {
       const actor = await this.telegram.linkedActor(chatId, String(callback.from.id));
       let intent: any;
       try {
+        await this.telegram.acknowledgeCallback(String(callback.id), "Processing action…");
+        await this.telegram.sendChatAction(chatId).catch(() => undefined);
         intent = await this.telegram.consumeActionIntent(callback.data, actor);
         const user = actor as AuthenticatedUser;
         if (intent.action === 'details') {
           const rec: any = await this.revenue.telegramRecommendation(intent.recommendationId || intent.entityId, user);
           const buttons = [] as any[];
           if (rec.proposedAction !== 'manual_review') {
-            for (const strategy of ['conservative', 'balanced', 'aggressive'])
+            const intendedStrategy = recommendedPricingStrategy(rec);
+            for (const strategy of intendedStrategy ? [intendedStrategy] : ['conservative', 'balanced', 'aggressive'])
               buttons.push([
                 {
                   text: `Preview ${strategy}`,
@@ -405,7 +409,8 @@ export class RevenueController {
           );
           await this.telegram.sendToChat(
             chatId,
-            `✅ Action result: ${result.status}\nVerification is persisted in Kivora.`,
+            `✅ Action result: ${result.status}\nVerified listings: ${result.verifiedCount ?? 0}/${result.totalListings ?? result.children?.length ?? 1}\n\nThe execution and its verification record are persisted in Kivora.`,
+            { inline_keyboard: [[{ text: "Open action workspace", url: `${this.config.get<string>('FRONTEND_URL', 'http://localhost:3000').replace(/\/$/, '')}/dashboard/activity` }]] },
           );
           return { ok: true };
         }
@@ -479,17 +484,20 @@ export class RevenueController {
           return { ok: true };
         }
       } catch (error) {
+        await this.telegram.acknowledgeCallback(String(callback.id), error instanceof Error ? error.message.slice(0, 120) : "Action failed").catch(() => undefined);
         await this.telegram.recordCallbackFailure(actor, chatId, error, intent || {});
         throw error;
       }
     }
 
     if (message?.text === '/briefing' && message?.chat?.id && message?.from?.id) {
+      await this.telegram.sendChatAction(String(message.chat.id)).catch(() => undefined);
       const actor = await this.telegram.linkedActor(String(message.chat.id), String(message.from.id));
       const dashboard = await this.revenue.dashboard(actor as AuthenticatedUser);
       return this.telegram.dailyBriefing(String(message.chat.id), dashboard.summary);
     }
     if (message?.text === '/opportunities' && message?.chat?.id && message?.from?.id) {
+      await this.telegram.sendChatAction(String(message.chat.id)).catch(() => undefined);
       const actor = await this.telegram.linkedActor(String(message.chat.id), String(message.from.id));
       const items = await this.revenue.getOpportunities(actor as AuthenticatedUser);
       const text = items.length
@@ -509,6 +517,7 @@ export class RevenueController {
         'Kivora commands\n/briefing — portfolio summary\n/opportunities — ranked revenue opportunities\n\nOr ask a question about your live portfolio in natural language.',
       );
     if (typeof message?.text === 'string' && !message.text.startsWith('/') && message?.chat?.id && message?.from?.id) {
+      await this.telegram.sendChatAction(String(message.chat.id)).catch(() => undefined);
       const actor = await this.telegram.linkedActor(String(message.chat.id), String(message.from.id));
       const response = await this.revenue.ask(message.text.slice(0, 500), actor as AuthenticatedUser, 'telegram');
       return this.telegram.sendToChat(String(message.chat.id), response.body.slice(0, 4000));

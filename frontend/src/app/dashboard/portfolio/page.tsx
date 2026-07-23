@@ -114,7 +114,7 @@ export default function PortfolioDashboardPage() {
         <div className="grid gap-4 md:grid-cols-2">
           {listings.map((item) => {
             const m = item.metrics;
-            const isDynamic = Boolean(m?.dynamicPricingEnabled);
+            const pricingState = m?.dynamicPricingEnabled === true ? "enabled" : m?.dynamicPricingEnabled === false ? "disabled" : "unknown";
             const title = item.nickname || item.title || item.id;
 
             return (
@@ -131,7 +131,7 @@ export default function PortfolioDashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <StatusBadge variant={isDynamic ? "healthy" : "warning"} label={isDynamic ? "DYNAMIC ON" : "REVIEW"} />
+                  <StatusBadge variant={pricingState === "enabled" ? "healthy" : pricingState === "disabled" ? "warning" : "pending"} label={pricingState === "enabled" ? "DYNAMIC ON" : pricingState === "disabled" ? "REVIEW NEEDED" : "STATUS UNAVAILABLE"} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 border-t border-white/5 pt-3 text-center sm:grid-cols-4 sm:gap-2">

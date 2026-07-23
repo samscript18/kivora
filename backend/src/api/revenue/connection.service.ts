@@ -71,11 +71,21 @@ export class ConnectionService {
   }
 
   async test(actor: AuthenticatedUser, connectionId: string) {
+    this.requireManager(actor);
     const { connection, credential } = await this.credential(actor, connectionId);
     try {
       const listings = await this.wheelhouse.listings(credential);
       const capabilities = this.wheelhouse.capabilities(credential);
-      await this.connections.updateOne({ _id: connection._id, organizationId: this.id(actor.organizationId) }, { $set: { status: "connected", readCapability: true, capabilities, lastSuccessfulSynchronization: new Date() }, $unset: { lastError: 1, lastFailedSynchronization: 1 } });
+      await this.refreshListingMappings(actor, connection._id, listings);
+      const writeCapability = capabilities.writeAccess === "verified";
+      await this.connections.updateOne({ _id: connection._id, organizationId: this.id(actor.organizationId) }, { $set: {
+        status: "connected",
+        readCapability: true,
+        writeCapability,
+        capabilities,
+        supportedMutationTypes: writeCapability ? ["pricing_preset", "remove_base_price_override", "automatic_rate_posting", "listing_sync"] : [],
+        lastSuccessfulSynchronization: new Date(),
+      }, $unset: { lastError: 1, lastFailedSynchronization: 1 } });
       return { connected: true, listingCount: listings.length, capabilities };
     } catch (error) {
       await this.connections.updateOne({ _id: connection._id }, { $set: { status: "degraded", lastFailedSynchronization: new Date(), lastError: this.errorMessage(error) } });
@@ -90,6 +100,7 @@ export class ConnectionService {
     if (!current) throw new NotFoundException("Wheelhouse connection not found");
     const listings = await this.wheelhouse.listings(credential);
     const capabilities = this.wheelhouse.capabilities(credential);
+    await this.refreshListingMappings(actor, current._id, listings);
     await this.connections.updateOne({ _id: current._id, organizationId }, { $set: { encryptedCredential: this.encrypt(credential), status: "connected", capabilities, readCapability: true, writeCapability: capabilities.writeAccess === "verified", lastSuccessfulSynchronization: new Date() }, $unset: { lastError: 1, revokedAt: 1 } });
     await this.audit(actor, "wheelhouse_credential_replaced", connectionId, { listingCount: listings.length, capabilities });
     return { ...this.serialize({ ...current, capabilities, status: "connected", lastSuccessfulSynchronization: new Date() }), validatedListings: listings.length };
@@ -148,6 +159,30 @@ export class ConnectionService {
   }
   private serialize(value: any) { const { encryptedCredential: _secret, ...safe } = value; return { ...safe, id: String(value._id), organizationId: String(value.organizationId), createdBy: String(value.createdBy) }; }
   private safeListing(listing: unknown) { return JSON.parse(JSON.stringify(listing)) as Record<string, unknown>; }
+  private async refreshListingMappings(actor: AuthenticatedUser, connectionId: Types.ObjectId, liveListings: Array<{ id: string; channel: string; nickname?: string; title?: string; location?: { address?: string; country?: string }; currency?: string; is_active?: boolean }>) {
+    if (!liveListings.length) return;
+    const organizationId = this.id(actor.organizationId);
+    const portfolio = await this.portfolios.findOne({ organizationId, connectionId, status: "active" }).sort({ createdAt: 1 }).lean();
+    if (!portfolio) throw new NotFoundException("Active portfolio not found for this Wheelhouse connection");
+    const synchronizedAt = new Date();
+    await this.listings.bulkWrite(liveListings.map((listing) => ({
+      updateOne: {
+        filter: { organizationId, connectionId, externalListingId: listing.id, channel: listing.channel },
+        update: {
+          $set: {
+            name: listing.nickname || listing.title || listing.id,
+            market: listing.location?.address || listing.location?.country,
+            currency: listing.currency || portfolio.defaultCurrency,
+            source: this.safeListing(listing),
+            lastSynchronizedAt: synchronizedAt,
+            active: listing.is_active !== false,
+          },
+          $setOnInsert: { organizationId, connectionId, portfolioId: portfolio._id, externalListingId: listing.id, channel: listing.channel },
+        },
+        upsert: true,
+      },
+    })), { ordered: false });
+  }
   private id(value: string) { if (!Types.ObjectId.isValid(value)) throw new BadRequestException("Resource identifier is invalid"); return new Types.ObjectId(value); }
   private requireManager(actor: AuthenticatedUser) { if (!["owner", "administrator", "revenue_manager"].includes(actor.organizationRole)) throw new ForbiddenException("Revenue manager permission is required"); }
   private errorMessage(error: unknown) { return error instanceof Error ? error.message.slice(0, 500) : "Wheelhouse request failed"; }

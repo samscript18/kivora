@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional, ServiceUnavailableException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, Optional, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectConnection, InjectModel } from "@nestjs/mongoose";
 import { Connection, Model, Types } from "mongoose";
@@ -19,7 +19,7 @@ import { CollaborationEntry, DistributedLock, NotificationDelivery, Outcome, Por
 import { MetricsService } from "../monitoring/metrics.service";
 import {OrganizationIntegrationService}from"../integrations/services/organization-integration.service";
 import {opportunityRuleEligible}from"./opportunity-rules";
-import {scheduledGroupResult}from"./scheduled-action";
+import {recommendedPricingStrategy,scheduledGroupResult}from"./scheduled-action";
 
 type Factor = { label: string; value: string; note: string };
 type LiveIncident = {
@@ -83,8 +83,23 @@ export class RevenueService {
     return { wheelhouse: this.wheelhouse.capabilities(), marketIntelligence: this.market.capabilities(), telegram: this.telegram.capabilities(), ai: this.groq.capabilities(), database: { configured: Boolean(this.config.get("MONGODB_URI")), connected: this.connection.readyState === 1 }, lastScan: this.lastScan ?? null, lastIntelligenceRefresh: this.lastIntelligenceRefresh ?? null };
   }
 
-  async scanPortfolio(actor?: AuthenticatedUser) {
+  async capabilitiesFor(actor: AuthenticatedUser) {
     const scope = await this.scope(actor);
+    return {
+      ...this.capabilities(),
+      wheelhouse: this.scopedWheelhouseCapabilities(scope),
+      permissions: {
+        canManageOrganization: ["owner", "administrator"].includes(actor.organizationRole),
+        canManageRevenue: ["owner", "administrator", "revenue_manager"].includes(actor.organizationRole),
+        canAnalyze: ["owner", "administrator", "revenue_manager", "analyst"].includes(actor.organizationRole),
+      },
+      lastScan: this.lastScanFor(actor) ?? null,
+      lastIntelligenceRefresh: this.tenantIntelligenceRefresh.get(this.tenantKey(actor)) ?? null,
+    };
+  }
+
+  async scanPortfolio(actor?: AuthenticatedUser, requestedConnectionId?: string) {
+    const scope = await this.scope(actor, requestedConnectionId);
     const tenantKey = this.tenantKey(actor);
     const lockOwner = randomUUID();
     const lockKey = `scan:${tenantKey}:${scope.connectionId || "legacy"}`;
@@ -92,7 +107,18 @@ export class RevenueService {
     try {
     if (!scope.credential && !this.wheelhouse.configured) throw new ServiceUnavailableException("Wheelhouse is not configured");
     const listings = await this.wheelhouse.listings(scope.credential);
-    if (actor) this.tenantListings.set(tenantKey, listings); else this.listingsCache = listings;
+    if (actor) {
+      await this.synchronizeListingMappings(actor, listings, scope.connectionId, scope.portfolioId);
+      if (requestedConnectionId && this.connection.db) {
+        const connectionListingIds = await this.connection.db.collection("listingmappings")
+          .find({ organizationId: new Types.ObjectId(actor.organizationId), connectionId: new Types.ObjectId(requestedConnectionId) }, { projection: { externalListingId: 1 } })
+          .toArray();
+        const replace = new Set(connectionListingIds.map((row) => String(row.externalListingId)));
+        this.tenantListings.set(tenantKey, [...this.listingsFor(actor).filter((listing) => !replace.has(listing.id)), ...listings]);
+      } else {
+        this.tenantListings.set(tenantKey, listings);
+      }
+    } else this.listingsCache = listings;
     // Five Wheelhouse reads per listing plus pagination keeps the default scan below
     // the documented 60-request/minute integration limit.
     const limit = Math.max(1, Math.min(10, this.config.get<number>("SCAN_BATCH_SIZE", 10)));
@@ -157,18 +183,19 @@ export class RevenueService {
     const base = Number(preferences.base_price ?? recommendations.base_price ?? 0);
     const recommended = Number(recommendations.base_price_recommended ?? 0);
     const posting = preferences.automatic_rate_posting_enabled ?? recommendations.automatic_rate_posting_enabled ?? true;
-    const occupancy = metricAt(kpis, "occupancy");
-    const adr = metricAt(kpis, "adr");
-    const revenue = metricAt(kpis, "revenue");
-    const revpar = metricAt(kpis, "revpar");
+    const forwardOccupancy = metricAt(kpis, "occupancy", "0_30");
+    const occupancy = metricAt(kpis, "occupancy", "30_0");
+    const adr = metricAt(kpis, "adr", "30_0");
+    const revenue = metricAt(kpis, "revenue", "30_0");
+    const revpar = metricAt(kpis, "revpar", "30_0");
     const pickup = metricAt(kpis, "pickup", "30_0");
     const marketOccupancy = metricAt(kpis, "occupancy_neighborhood");
     const compSetOccupancy = metricAt(kpis, "comp_set_occupancy");
     const revenueScore = metricAt(kpis, "revenue_score");
     const divergence = recommended > 0 && base > 0 ? (recommended - base) / recommended : 0;
-    const marketGap = Math.max(0, marketOccupancy - occupancy);
+    const marketGap = Math.max(0, marketOccupancy - forwardOccupancy);
     const health = Math.max(0, Math.min(100, Math.round(100 - (posting ? 0 : 30) - Math.max(0, divergence) * 45 - marketGap * 30)));
-    await this.snapshots.create({ ...this.orgScope(actor), ...(portfolioId ? { portfolioId: new Types.ObjectId(portfolioId) } : {}), listingId: listing.id, channel: listing.channel, health, occupancy, adr, revenue, revpar, pickup, marketOccupancy, compSetOccupancy, revenueScore, dynamicPricingEnabled: posting, basePrice: base, recommendedBasePrice: recommended, raw: { kpis } });
+    await this.snapshots.create({ ...this.orgScope(actor), ...(portfolioId ? { portfolioId: new Types.ObjectId(portfolioId) } : {}), listingId: listing.id, channel: listing.channel, health, occupancy, forwardOccupancy, adr, revenue, revpar, pickup, marketOccupancy, compSetOccupancy, revenueScore, dynamicPricingEnabled: posting, basePrice: base, recommendedBasePrice: recommended, raw: { kpis } });
     const serializedFlags = JSON.stringify(flagsResult).toLowerCase();
     const calendarFlag = /(calendar|sync|channel).*(error|fail|stale|disconnect)|(?:error|fail|stale|disconnect).*(calendar|sync|channel)/.test(serializedFlags);
     const slowPace = marketOccupancy > 0 && marketGap >= 0.2;
@@ -186,7 +213,7 @@ export class RevenueService {
             : "Booking pace below market";
     const pricingIncident = !posting || materiallyUnderpriced || materiallyOverpriced;
     const affected = Math.min(30, recommendations.data?.length ?? 0);
-    const pricingExposure = Math.abs(recommended - base) * Math.max(1, affected) * Math.max(0.35, occupancy || marketOccupancy || 0);
+    const pricingExposure = Math.abs(recommended - base) * Math.max(1, affected) * Math.max(0.35, forwardOccupancy || marketOccupancy || 0);
     const paceExposure = Math.max(0, marketGap) * Math.max(recommended, adr, 1) * 30;
     const atRisk = Math.max(0, Math.round(pricingIncident ? pricingExposure : paceExposure));
     const suffix = !posting ? "posting-disabled" : calendarFlag ? "calendar-sync" : materiallyUnderpriced ? "underpriced" : materiallyOverpriced ? "overpriced" : "slow-pace";
@@ -194,7 +221,7 @@ export class RevenueService {
     const explanation = pricingIncident
       ? `${cause} is preventing Wheelhouse's recommendation from controlling the effective base rate.`
       : `${cause} was verified from current Wheelhouse flags and rolling market KPIs. Kivora will not change pricing automatically for this issue.`;
-    return { id: `${listing.id}-${suffix}`, externalId: `${listing.id}-${suffix}`, listingId: listing.id, channel: listing.channel, severity: atRisk > 3000 || calendarFlag ? "Critical" : "Warning", title, listing: listing.nickname || listing.title || listing.id, location: listing.location?.address || listing.location?.country || "Unknown", currentRate: base, recommendedRate: recommended, revenueAtRisk: atRisk, confidence: Math.min(99, Math.round(78 + Math.abs(divergence) * 20 + (calendarFlag ? 8 : 0))), cause, detectedAt: new Date().toISOString(), status: "open", explanation, factors: [{ label: "Base price gap", value: `${Math.round(divergence * 100)}%`, note: "vs Wheelhouse" }, { label: "30-day occupancy", value: `${Math.round(occupancy * 100)}%`, note: "rolling KPI" }, { label: "Market occupancy", value: `${Math.round(marketOccupancy * 100)}%`, note: "neighborhood KPI" }, { label: "Automatic posting", value: posting ? "On" : "Off", note: "pricing preference" }, { label: "Recent rate change", value: changesResult?.rates || "Unknown", note: "Wheelhouse" }], evidence: { affectedNights: affected, occupancyProbability: Math.max(0.35, occupancy || marketOccupancy || 0), previousState: previousSnapshot ? { health: previousSnapshot.health, occupancy: previousSnapshot.occupancy, adr: previousSnapshot.adr, revenue: previousSnapshot.revenue, basePrice: previousSnapshot.basePrice } : {} }, preferences, owner: listing.owner_name, canPreview: pricingIncident, canAutoResolve: pricingIncident };
+    return { id: `${listing.id}-${suffix}`, externalId: `${listing.id}-${suffix}`, listingId: listing.id, channel: listing.channel, severity: atRisk > 3000 || calendarFlag ? "Critical" : "Warning", title, listing: listing.nickname || listing.title || listing.id, location: listing.location?.address || listing.location?.country || "Unknown", currentRate: base, recommendedRate: recommended, revenueAtRisk: atRisk, confidence: Math.min(99, Math.round(78 + Math.abs(divergence) * 20 + (calendarFlag ? 8 : 0))), cause, detectedAt: new Date().toISOString(), status: "open", explanation, factors: [{ label: "Base price gap", value: `${Math.round(divergence * 100)}%`, note: "vs Wheelhouse" }, { label: "Forward 30-day occupancy", value: `${Math.round(forwardOccupancy * 100)}%`, note: "booking pace KPI" }, { label: "Trailing 30-day occupancy", value: `${Math.round(occupancy * 100)}%`, note: "historical KPI" }, { label: "Market occupancy", value: `${Math.round(marketOccupancy * 100)}%`, note: "neighborhood KPI" }, { label: "Automatic posting", value: posting ? "On" : "Off", note: "pricing preference" }, { label: "Recent rate change", value: changesResult?.rates || "Unknown", note: "Wheelhouse" }], evidence: { affectedNights: affected, occupancyProbability: Math.max(0.35, forwardOccupancy || marketOccupancy || 0), previousState: previousSnapshot ? { health: previousSnapshot.health, occupancy: previousSnapshot.occupancy, adr: previousSnapshot.adr, revenue: previousSnapshot.revenue, basePrice: previousSnapshot.basePrice } : {} }, preferences, owner: listing.owner_name, canPreview: pricingIncident, canAutoResolve: pricingIncident };
   }
 
   async dashboard(actor?: AuthenticatedUser) {
@@ -241,7 +268,7 @@ export class RevenueService {
     ].map((item: any) => ({ ...item, type: item.kind, priorityScore: this.priorityScore(item) })).sort((a, b) => b.priorityScore - a.priorityScore);
     return {
       source: "Wheelhouse live",
-      capabilities: { ...this.capabilities(), wheelhouse: this.wheelhouse.capabilities(activeScope.credential), lastScan: this.lastScanFor(actor) ?? null, lastIntelligenceRefresh: actor ? this.tenantIntelligenceRefresh.get(this.tenantKey(actor)) ?? null : this.lastIntelligenceRefresh ?? null },
+      capabilities: { ...this.capabilities(), wheelhouse: this.scopedWheelhouseCapabilities(activeScope), lastScan: this.lastScanFor(actor) ?? null, lastIntelligenceRefresh: actor ? this.tenantIntelligenceRefresh.get(this.tenantKey(actor)) ?? null : this.lastIntelligenceRefresh ?? null },
       summary: { health: (latestHealth as any)?.overallScore ?? health, healthDetails: latestHealth, revenue, atRisk: incidents.reduce((sum, item) => sum + item.revenueAtRisk, 0), projectedOpportunity: opportunityTotals.impact, opportunities: opportunityTotals.count, occupancy: Number((occupancy * 100).toFixed(1)), criticalIncidents: incidents.filter((item) => item.severity === "Critical").length, marketSignals: signals.length, activeRecommendations: Object.entries(recommendationCounts).filter(([status]) => !["COMPLETED", "DISMISSED", "EXPIRED", "CANCELLED", "FAILED"].includes(status)).reduce((sum, [, count]) => sum + Number(count), 0), awaitingApproval: Number(recommendationCounts.READY || 0) + Number(recommendationCounts.REVIEWED || 0), scheduledActions: Number(actionCounts.SCHEDULED || 0), verificationFailures: Number(actionCounts.FAILED || 0) + Number(actionCounts.PARTIALLY_APPLIED || 0), revenueProtected: outcomeTotals.revenueProtected || 0, realizedRevenue: outcomeTotals.realizedRevenue || 0, recentOutcomes: outcomeTotals.recent || 0, timeSavedMinutes: productivity.minutesSaved, timeSavedCalculation: productivity.calculation },
       trend, incident: incidents[0] ?? null, opportunities, priorities, signals,
       activity: activity.length
@@ -256,7 +283,29 @@ export class RevenueService {
     const snapshots = await this.snapshots.find({ ...this.orgScope(actor), listingId: { $in: listings.map((item) => item.id) } }).sort({ createdAt: -1 }).lean();
     const latest = new Map<string, Snapshot>();
     snapshots.forEach((snapshot) => { if (!latest.has(snapshot.listingId)) latest.set(snapshot.listingId, snapshot); });
-    return { source: "Wheelhouse live", listings: listings.map((listing) => ({ ...listing, metrics: latest.get(listing.id) ?? null })) };
+    return {
+      source: "Wheelhouse live",
+      listings: listings.map((listing) => ({
+        ...listing,
+        location: listing.location ? {
+          ...listing.location,
+          lat: listing.location.latitude,
+          lng: listing.location.longitude,
+        } : undefined,
+        bedrooms: listing.num_bedrooms,
+        beds: listing.num_beds,
+        bathrooms: listing.num_bathrooms,
+        propertyType: listing.property_type,
+        roomType: listing.room_type,
+        thumbnail: listing.thumb_url,
+        ownerName: listing.owner_name,
+        starRating: listing.star_rating,
+        reviewCount: listing.num_reviews,
+        photoCount: listing.num_photos,
+        minimumStay: listing.base_min_night_stay,
+        metrics: latest.get(listing.id) ?? null,
+      })),
+    };
   }
   async listingWorkspace(id:string,actor:AuthenticatedUser){if(!this.connectionService||!this.connection.db)throw new ServiceUnavailableException("Listing workspace unavailable");const organizationId=new Types.ObjectId(actor.organizationId);const mapping:any=await this.connection.db.collection("listingmappings").findOne({organizationId,externalListingId:id,active:true});if(!mapping)throw new NotFoundException("Active organization listing not found");const {connection,credential}=await this.connectionService.credential(actor,String(mapping.connectionId));const [preferences,pricing,recentChanges,neighborhood,snapshots,incidents,opportunities,signals]=await Promise.all([this.wheelhouse.preferences(id,mapping.channel,credential),this.wheelhouse.recommendations(id,mapping.channel,credential),this.wheelhouse.recentChanges(id,mapping.channel,credential).catch(()=>null),this.wheelhouse.neighborhoodPricing(id,mapping.channel,credential).catch(()=>null),this.snapshots.find({organizationId,listingId:id}).sort({createdAt:-1}).limit(60).lean(),this.incidents.find({organizationId,listingId:id}).sort({createdAt:-1}).limit(30).lean(),this.opportunityRecords?.find({organizationId,$or:[{listingId:id},{listingIds:id}]}).sort({createdAt:-1}).limit(30).lean()||[],this.connection.db.collection("marketsignals").find({organizationId,listingIds:id,expiresAt:{$gt:new Date()}}).sort({startsAt:1}).limit(30).toArray()]);const incidentIds=incidents.map((x:any)=>x._id),opportunityIds=(opportunities as any[]).map(x=>x._id);const recommendations:any[]=this.recommendationRecords?await this.recommendationRecords.find({organizationId,$or:[{listingId:id},{listingIds:id},{incidentId:{$in:incidentIds}},{opportunityId:{$in:opportunityIds}}]}).sort({createdAt:-1}).lean():[];const recIds=recommendations.map(x=>x._id);const [simulations,actions,reports]=await Promise.all([this.simulations?.find({organizationId,recommendationId:{$in:recIds}}).sort({createdAt:-1}).lean()||[],this.actions?.find({organizationId,$or:[{targetListings:id},{recommendationId:{$in:recIds}}]}).sort({createdAt:-1}).lean()||[],this.reports.find({organizationId,$or:[{"metrics.listing.id":id},{"metrics.listingId":id}]}).sort({createdAt:-1}).lean()]);const outcomes=this.outcomes&&(actions as any[]).length?await this.outcomes.find({organizationId,actionId:{$in:(actions as any[]).map(x=>x._id)}}).sort({createdAt:-1}).lean():[];const entityIds=[...recIds,...(actions as any[]).map(x=>x._id)].map(String);const activity=await this.audits.find({organizationId,$or:[{entityId:{$in:entityIds}},{incidentId:{$in:incidents.map((x:any)=>x.externalId)}}]}).sort({createdAt:-1}).limit(100).lean();const portfolio=await this.connection.db.collection("portfolios").findOne({_id:mapping.portfolioId,organizationId});return{listing:{id,name:mapping.name,market:mapping.market,status:mapping.active?"active":"archived",channel:mapping.channel,lastSynchronizedAt:mapping.lastSynchronizedAt,propertyProfiles:mapping.propertyProfiles||[],assigneeIds:mapping.assigneeIds||[],portfolio:portfolio?{id:String(portfolio._id),name:portfolio.name,timezone:portfolio.timezone,currency:portfolio.defaultCurrency}:null,connection:{id:String(connection._id),displayName:connection.displayName,status:connection.status,readCapability:connection.readCapability,writeCapability:connection.writeCapability}},performance:{current:snapshots[0]||null,history:snapshots},pricing:{preferences,recommendations:pricing,recentChanges,neighborhood},intelligence:{incidents:incidents.map(x=>this.serializeDocument(x)),opportunities:(opportunities as any[]).map(x=>this.serializeDocument(x)),recommendations:recommendations.map(x=>this.serializeDocument(x)),signals},operations:{simulations:(simulations as any[]).map(x=>this.serializeDocument(x)),actions:(actions as any[]).map(x=>this.serializeDocument(x)),outcomes:(outcomes as any[]).map(x=>this.serializeDocument(x)),activity,reports},capabilities:{...this.wheelhouse.capabilities(credential),canApprove:["owner","administrator","revenue_manager"].includes(actor.organizationRole),listingActive:mapping.active,lastSynchronizedAt:mapping.lastSynchronizedAt}};}
 
@@ -265,11 +314,126 @@ export class RevenueService {
     return this.incidentsFor(actor);
   }
 
+  async listingWorkspaceDepth(id: string, actor: AuthenticatedUser) {
+    await this.ensureListingMapping(actor, id);
+    const workspace: any = await this.listingWorkspace(id, actor);
+    if (!this.connectionService) return workspace;
+
+    const { credential } = await this.connectionService.credential(actor, workspace.listing.connection.id);
+    const channel = workspace.listing.channel;
+    const now = new Date();
+    const historyStart = new Date(now);
+    historyStart.setUTCDate(historyStart.getUTCDate() - 30);
+    const reservationEnd = new Date(now);
+    reservationEnd.setUTCDate(reservationEnd.getUTCDate() + 180);
+    const date = (value: Date) => value.toISOString().slice(0, 10);
+    const unavailable: string[] = [];
+    const optional = async <T>(name: string, request: Promise<T>): Promise<T | null> => {
+      try {
+        return await request;
+      } catch {
+        unavailable.push(name);
+        return null;
+      }
+    };
+
+    const [
+      details,
+      pricingTier,
+      rollingKpis,
+      monthlyKpis,
+      neighborhoodOccupancy,
+      reservations,
+      flags,
+      basePriceHistory,
+      checkinCheckout,
+      minMaxPrices,
+      monthlySeasonality,
+    ] = await Promise.all([
+      optional("listing_details", this.wheelhouse.listing(id, channel, credential)),
+      optional("pricing_tier", this.wheelhouse.pricingTier(id, channel, credential)),
+      optional("rolling_kpis", this.wheelhouse.kpis(id, channel, credential)),
+      optional("monthly_kpis", this.wheelhouse.monthlyKpis(id, channel, credential)),
+      optional("neighborhood_occupancy", this.wheelhouse.neighborhoodOccupancy(id, channel, credential)),
+      optional("reservations", this.wheelhouse.reservations(id, channel, date(now), date(reservationEnd), credential)),
+      optional("flags", this.wheelhouse.flags(id, channel, credential)),
+      optional("base_price_history", this.wheelhouse.basePriceHistory(id, channel, date(historyStart), date(now), credential)),
+      optional("checkin_checkout", this.wheelhouse.checkinCheckout(id, channel, credential)),
+      optional("min_max_prices", this.wheelhouse.minMaxPrices(id, channel, credential)),
+      optional("monthly_seasonality", this.wheelhouse.monthlySeasonality(id, channel, credential)),
+    ]);
+
+    if (workspace.pricing.neighborhood == null) unavailable.push("neighborhood_pricing");
+    if (workspace.pricing.recentChanges == null) unavailable.push("recent_changes");
+    const uniqueUnavailable = [...new Set(unavailable)];
+    const available = [
+      "preferences",
+      "price_recommendations",
+      ...(workspace.pricing.neighborhood != null ? ["neighborhood_pricing"] : []),
+      ...(workspace.pricing.recentChanges != null ? ["recent_changes"] : []),
+      ...(details ? ["listing_details"] : []),
+      ...(pricingTier ? ["pricing_tier"] : []),
+      ...(rollingKpis ? ["rolling_kpis"] : []),
+      ...(monthlyKpis ? ["monthly_kpis"] : []),
+      ...(neighborhoodOccupancy ? ["neighborhood_occupancy"] : []),
+      ...(reservations ? ["reservations"] : []),
+      ...(flags ? ["flags"] : []),
+      ...(basePriceHistory ? ["base_price_history"] : []),
+      ...(checkinCheckout ? ["checkin_checkout"] : []),
+      ...(minMaxPrices ? ["min_max_prices"] : []),
+      ...(monthlySeasonality ? ["monthly_seasonality"] : []),
+    ];
+
+    return {
+      ...workspace,
+      listing: {
+        ...workspace.listing,
+        ...(details || {}),
+        name: details?.nickname || details?.title || workspace.listing.name,
+        flags: flags || [],
+      },
+      performance: {
+        ...workspace.performance,
+        rolling: rollingKpis,
+        monthly: monthlyKpis,
+      },
+      pricing: {
+        ...workspace.pricing,
+        pricingTier,
+        neighborhoodOccupancy,
+        basePriceHistory,
+        checkinCheckout,
+        minMaxPrices,
+        monthlySeasonality,
+      },
+      operations: {
+        ...workspace.operations,
+        reservations: reservations || [],
+      },
+      liveData: {
+        fetchedAt: new Date().toISOString(),
+        available,
+        unavailable: uniqueUnavailable,
+        reservationWindow: { startDate: date(now), endDate: date(reservationEnd) },
+      },
+    };
+  }
+
   async getOpportunities(actor?: AuthenticatedUser) {
     if (actor && this.opportunityRecords) {
-      const rows = await this.opportunityRecords.find({ organizationId: new Types.ObjectId(actor.organizationId), status: { $ne: "expired" }, expiresAt: { $gt: new Date() } }).sort({ projectedRevenueGain: -1, confidence: -1 }).limit(200).lean();
+      // Keep historical records available: their linked recommendation lifecycle
+      // (READY, CANCELLED, COMPLETED, etc.) is a first-class filter in the UI.
+      const rows = await this.opportunityRecords.find({ organizationId: new Types.ObjectId(actor.organizationId), status: { $ne: "superseded" } }).sort({ projectedRevenueGain: -1, confidence: -1, createdAt: -1 }).limit(200).lean();
       const names = await this.opportunityListingNames(rows, actor);
-      return rows.map((row: any) => this.serializeOpportunity(row, names));
+      const recommendationIds = rows.map((row: any) => row.recommendationId).filter(Boolean);
+      const recommendations = this.recommendationRecords && recommendationIds.length
+        ? await this.recommendationRecords.find({ organizationId: new Types.ObjectId(actor.organizationId), _id: { $in: recommendationIds } }).select("_id opportunityId status").lean()
+        : [];
+      const lifecycleByOpportunity = new Map<string, string>();
+      for (const recommendation of recommendations as any[]) {
+        lifecycleByOpportunity.set(String(recommendation.opportunityId), recommendation.status);
+      }
+      return rows.map((row: any) => this.serializeOpportunity(row, names, lifecycleByOpportunity.get(String(row._id))));
     }
     return this.toOpportunities(await this.getIncidents(actor));
   }
@@ -281,6 +445,7 @@ export class RevenueService {
   getMarketIntelligence(actor?: AuthenticatedUser) { return this.market.list(actor?.organizationId); }
 
   async refreshMarketIntelligence(actor?: AuthenticatedUser) {
+    if (actor) this.requireAnalyst(actor);
     const scope = await this.scope(actor);
     let listings = this.listingsFor(actor);
     if (!listings.length) { listings = await this.wheelhouse.listings(scope.credential); this.setListings(actor, listings); }
@@ -313,6 +478,7 @@ export class RevenueService {
   }
 
   async strategies(listingId: string, actor?: AuthenticatedUser, recommendationId?: string) {
+    if (actor) this.requireAnalyst(actor);
     const scope = await this.scope(actor);
     let listings = this.listingsFor(actor);
     if (!listings.length) { listings = await this.wheelhouse.listings(scope.credential); this.setListings(actor, listings); }
@@ -364,14 +530,15 @@ export class RevenueService {
       await this.actions.updateOne({ _id: action._id }, { $inc: { attemptCount: 1 } });
     }
     try {
-      const upstream = await this.wheelhouse.updateSetting(listing.id, listing.channel, "base_price_adjustment", { type }, scope.credential);
-      await this.wheelhouse.sync(listing.id, listing.channel, scope.credential);
+    const upstream = await this.wheelhouse.updateSetting(listing.id, listing.channel, "base_price_adjustment", { type }, scope.credential);
+      await this.markConnectionWriteVerified(user, scope.connectionId);
+      const syncResult = await this.requestWheelhouseSync(listing.id, listing.channel, scope.credential);
       const after = await this.wheelhouse.preferences(listing.id, listing.channel, scope.credential);
       const actual = (after as any).base_price_adjustment;
       const verified = actual === type || (typeof actual === "object" && actual?.type === type);
       const status = verified ? "VERIFIED" : "APPLIED";
-      const verificationResult = { supported: actual !== undefined, expected: { base_price_adjustment: type }, actual: { base_price_adjustment: actual }, matched: verified };
-      if (action && this.actions) await this.actions.updateOne({ _id: action._id }, { $set: { status, upstreamResponse: this.safeUpstream(upstream), verificationResult, executedAt: new Date(), revertInformation: { supported: true, previousState: before, actionType: "restore_preferences" }, ...(verified ? { verifiedAt: new Date(), completedAt: new Date() } : {}) } });
+      const verificationResult = { supported: actual !== undefined, expected: { base_price_adjustment: type }, actual: { base_price_adjustment: actual }, matched: verified, sync: syncResult };
+      if (action && this.actions) await this.actions.updateOne({ _id: action._id }, { $set: { status, upstreamResponse: this.safeUpstream(upstream), verificationResult, executedAt: new Date(), completedAt: new Date(), revertInformation: { supported: true, previousState: before, actionType: "restore_preferences" }, ...(verified ? { verifiedAt: new Date() } : {}) } });
       await this.audits.create({ ...this.orgScope(user), ...(user ? { actorUserId: new Types.ObjectId(user.sub) } : {}), action: "apply_pricing_strategy", actor: actorName, entityType: "revenue_action", entityId: action ? String(action._id) : undefined, before, after, source: "Wheelhouse RM API", verified });
       if (verified && action && user && this.outcomes) await this.createOutcome(user, action._id, before, 0, listing.currency || "USD");
       this.metrics?.increment("revenue_actions_executed_total", { type: "pricing_preset", status });
@@ -391,7 +558,9 @@ export class RevenueService {
 
   async generateReport(type: "executive" | "portfolio" | "owner" | "revenue", actor: AuthenticatedUser | string, listingId?: string) {
     const user = typeof actor === "string" ? undefined : actor;
+    if(user&&!["owner","administrator","revenue_manager","analyst"].includes(user.organizationRole))throw new ForbiddenException("Report analyst permission is required");
     const actorName = typeof actor === "string" ? actor : actor.name;
+    const organization:any=user&&this.connection.db?await this.connection.db.collection("organizations").findOne({_id:new Types.ObjectId(user.organizationId)},{projection:{defaultCurrency:1,defaultTimezone:1}}):null;
     const dashboard = await this.dashboard(user);
     const portfolio = type === "portfolio" || type === "owner" ? await this.portfolio(user) : undefined;
     const listing = listingId ? portfolio?.listings.find((item) => item.id === listingId) : undefined;
@@ -408,7 +577,7 @@ export class RevenueService {
     const generated = await this.groq.report(type, facts);
     const body = this.reportBody(generated.body, type, facts);
     const label = ({ executive: "Executive revenue report", portfolio: "Portfolio performance report", owner: `Owner report — ${listing?.nickname || listing?.title || listingId}`, revenue: "Revenue opportunity summary" })[type];
-    const report = await this.reports.create({ ...this.orgScope(user), type, title: `${label} — ${new Date().toLocaleDateString("en-US")}`, body, generatedBy: generated.generatedBy, metrics: facts, status: "draft", currency: listing?.currency || "USD", timezone: "UTC", version: 1 });
+    const report = await this.reports.create({ ...this.orgScope(user), type, title: `${label} — ${new Date().toLocaleDateString("en-US")}`, body, generatedBy: generated.generatedBy, metrics: facts, status: "draft", currency: listing?.currency || organization?.defaultCurrency || "USD", timezone: organization?.defaultTimezone || "UTC", version: 1 });
     await this.audits.create({ ...this.orgScope(user), ...(user ? { actorUserId: new Types.ObjectId(user.sub) } : {}), action: `generate_${type}_report`, actor: actorName, entityType: "report", entityId: String(report._id), after: { reportId: String(report._id), listingId }, source: "Groq grounded in Wheelhouse live data", verified: true });
     return report.toObject();
   }
@@ -472,10 +641,12 @@ export class RevenueService {
   }
 
   async sendBrief(id: string, userId: string, actor?: AuthenticatedUser) {
-    const brief = await this.briefs.findOne({ _id: id, ...this.orgScope(actor) }).lean();
+    if(actor&&!['owner','administrator','revenue_manager'].includes(actor.organizationRole))throw new ForbiddenException("Revenue manager permission is required");
+    const briefId = this.objectId(id);
+    const brief = await this.briefs.findOne({ _id: briefId, ...this.orgScope(actor) }).lean();
     if (!brief) throw new NotFoundException("Owner brief not found");
     await this.telegram.sendToUser(userId, `Owner brief for ${brief.owner || brief.listingId}\n\n${brief.subject}\n\n${brief.body}`, actor?.organizationId);
-    return this.briefs.findOneAndUpdate({ _id: id, ...this.orgScope(actor) }, { $set: { status: "sent", sentAt: new Date() } }, { returnDocument: "after" }).lean();
+    return this.briefs.findOneAndUpdate({ _id: briefId, ...this.orgScope(actor) }, { $set: { status: "sent", sentAt: new Date() } }, { returnDocument: "after" }).lean();
   }
 
   async preview(id: string, actor?: AuthenticatedUser) {
@@ -522,22 +693,31 @@ export class RevenueService {
       if (action.status !== "EXECUTING") return { ...this.serializeAction(action), recovered: current.revenueAtRisk };
       await this.actions.updateOne({ _id: action._id }, { $inc: { attemptCount: 1 } });
     }
+    try {
     await this.wheelhouse.updatePreferences(current.listingId, current.channel, after, scope.credential);
     await this.wheelhouse.enableAutomaticPosting(current.listingId, current.channel, scope.credential);
-    await this.wheelhouse.sync(current.listingId, current.channel, scope.credential);
+    await this.markConnectionWriteVerified(user, scope.connectionId);
+    const syncResult = await this.requestWheelhouseSync(current.listingId, current.channel, scope.credential);
     const verified = await this.wheelhouse.preferences(current.listingId, current.channel, scope.credential);
     if (verified.base_price !== null && verified.base_price !== undefined) throw new ServiceUnavailableException("Wheelhouse verification failed: the base-price override remains active");
     this.setIncidents(user, this.incidentsFor(user).filter((item) => item.id !== id));
-    if (action && this.actions) await this.actions.updateOne({ _id: action._id }, { $set: { status: "VERIFIED", verificationResult: { matched: true, expected: { base_price: null, automatic_rate_posting_enabled: true }, actual: verified }, revertInformation: { supported: true, previousState: before, actionType: "restore_preferences" }, executedAt: new Date(), verifiedAt: new Date(), completedAt: new Date() } });
+    if (action && this.actions) await this.actions.updateOne({ _id: action._id }, { $set: { status: "VERIFIED", verificationResult: { matched: true, expected: { base_price: null, automatic_rate_posting_enabled: true }, actual: verified, sync: syncResult }, revertInformation: { supported: true, previousState: before, actionType: "restore_preferences" }, executedAt: new Date(), verifiedAt: new Date(), completedAt: new Date() } });
     if (recommendation && this.recommendationRecords) await this.recommendationRecords.updateOne({ _id: recommendation._id }, { $set: { status: "VERIFIED" }, $push: { transitions: { $each: [{ from: "APPROVED", to: "EXECUTING", actor: actorName, at: new Date() }, { from: "EXECUTING", to: "APPLIED", actor: "system", at: new Date() }, { from: "APPLIED", to: "VERIFYING", actor: "system", at: new Date() }, { from: "VERIFYING", to: "VERIFIED", actor: "system", at: new Date(), actionId: action ? String(action._id) : undefined }] } } });
     await Promise.all([this.audits.create({ ...this.orgScope(user), ...(user ? { actorUserId: new Types.ObjectId(user.sub) } : {}), action: "restore_dynamic_pricing", incidentId: id, actor: actorName, entityType: "revenue_action", entityId: action ? String(action._id) : undefined, before, after: verified, projectedImpact: current.revenueAtRisk, verified: true }), this.incidents.updateOne({ ...this.orgScope(user), externalId: current.externalId }, { $set: { status: "resolved", resolvedAt: new Date(), verificationState: "verified" } }), this.briefs.create({ ...this.orgScope(user), listingId: current.listingId, owner: current.owner, subject: "Revenue protection update", body: generated.body, status: "draft" })]);
     if (action && user && this.outcomes) await this.createOutcome(user, action._id, before, current.revenueAtRisk, "USD");
     this.metrics?.increment("revenue_actions_executed_total", { type: "restore_dynamic_pricing", status: "VERIFIED" }); this.metrics?.increment("action_verification_total", { result: "success" });
     return { status: "VERIFIED", recovered: current.revenueAtRisk, projectedRevenueProtected: current.revenueAtRisk, realizedRevenue: null, actionId: action ? String(action._id) : undefined, ownerDrafted: true, ownerBrief: generated.body, sync: "verified", source: "Wheelhouse live" };
+    } catch(error) {
+      if(action&&this.actions)await this.actions.updateOne({_id:action._id},{ $set:{status:"FAILED",completedAt:new Date(),errorDetails:{message:this.errorMessage(error),classification:"execution_or_verification_error"}}});
+      if(recommendation&&this.recommendationRecords)await this.recommendationRecords.updateOne({_id:recommendation._id,status:{$in:["APPROVED","EXECUTING"]}},{$set:{status:"FAILED",decisionReason:this.errorMessage(error)},$push:{transitions:{from:recommendation.status==="APPROVED"?"APPROVED":"EXECUTING",to:"FAILED",actor:"system",at:new Date(),reason:this.errorMessage(error),actionId:action?String(action._id):undefined}}});
+      this.metrics?.increment("revenue_actions_executed_total",{type:"restore_dynamic_pricing",status:"FAILED"});throw error;
+    }
   }
 
-  async underwrite(address: string, marketId: number, acquisitionCost: number, annualExpenses: number) {
-    const raw = await this.wheelhouse.marketTimeSeries(marketId);
+  async underwrite(address: string, marketId: number, acquisitionCost: number, annualExpenses: number, actor?: AuthenticatedUser) {
+    if (actor) this.requireAnalyst(actor);
+    const scope = await this.scope(actor);
+    const raw = await this.wheelhouse.marketTimeSeries(marketId, scope.credential);
     const monthlyRevenue = this.findNumbers(raw, "revenue").slice(-12);
     if (!monthlyRevenue.length) throw new ServiceUnavailableException("Wheelhouse market report did not contain revenue data");
     const annualRevenue = Math.round(monthlyRevenue.reduce((sum, value) => sum + value, 0));
@@ -561,6 +741,7 @@ export class RevenueService {
     // Authorization is evaluated before lifecycle state so an unprivileged caller
     // cannot infer whether an approval target is currently actionable.
     if (decision === "approve" && !["owner", "administrator", "revenue_manager"].includes(actor.organizationRole)) throw new ForbiddenException("Revenue manager permission is required");
+    this.requireAnalyst(actor);
     const recommendation = await this.recommendationRecords.findOne({ _id: new Types.ObjectId(id), organizationId: new Types.ObjectId(actor.organizationId) }).lean();
     if (!recommendation) throw new NotFoundException("Recommendation not found");
     const transitions: Record<string, Record<string, string[]>> = {
@@ -595,6 +776,7 @@ export class RevenueService {
       if (!simulationId || !this.simulations) throw new BadRequestException("A current strategy simulation is required for a scheduled preset");
       simulation = await this.simulations.findOne({ _id: this.objectId(simulationId), organizationId: recommendation.organizationId, recommendationId: recommendation._id, expiresAt: { $gt: executeDate } }).lean();
       if (!simulation) throw new ConflictException("The selected simulation expires before scheduled execution; refresh and choose a later-valid preview");
+      const sourceOpportunity:any=recommendation.opportunityId&&this.opportunityRecords?await this.opportunityRecords.findOne({_id:recommendation.opportunityId,organizationId:recommendation.organizationId}).lean():null;const intendedStrategy=recommendedPricingStrategy(recommendation,sourceOpportunity);if(intendedStrategy&&simulation.selectedStrategy!==intendedStrategy)throw new ConflictException(`The approved recommendation requires the ${intendedStrategy} preset; choose its matching preview`);
     }
     let scope = await this.scope(actor);const scheduleListings=recommendation.listingIds?.length?recommendation.listingIds:recommendation.listingId?[recommendation.listingId]:[];const scheduleMapping:any=scheduleListings.length&&this.connection?.db?await this.connection.db.collection("listingmappings").findOne({organizationId:new Types.ObjectId(actor.organizationId),externalListingId:scheduleListings[0],active:true}):null;if(scheduleMapping&&String(scheduleMapping.connectionId)!==scope.connectionId){const selected=await this.connectionService!.credential(actor,String(scheduleMapping.connectionId));scope={credential:selected.credential,connectionId:String(scheduleMapping.connectionId),portfolioId:String(scheduleMapping.portfolioId)};}
     const idempotencyKey = createHash("sha256").update(`${actor.organizationId}:${id}:${executeDate.toISOString()}`).digest("hex");
@@ -620,10 +802,10 @@ export class RevenueService {
     if (!mapping?.channel) throw new ConflictException("The listing mapping required for reversion is no longer active");
     const expected = original.revertInformation.previousState as Record<string, unknown>;
     try {
-      const upstream = await this.wheelhouse.updatePreferences(listingId, mapping.channel, expected, credential); await this.wheelhouse.sync(listingId, mapping.channel, credential);
+      const upstream = await this.wheelhouse.updatePreferences(listingId, mapping.channel, expected, credential); await this.markConnectionWriteVerified(actor,String(original.connectionId)); const syncResult=await this.requestWheelhouseSync(listingId,mapping.channel,credential);
       const actual = await this.wheelhouse.preferences(listingId, mapping.channel, credential); const keys = ["base_price", "automatic_rate_posting_enabled", "base_price_adjustment"].filter((key) => key in expected);
       const matched = keys.length > 0 && keys.every((key) => JSON.stringify((actual as any)[key]) === JSON.stringify((expected as any)[key])); const status = matched ? "VERIFIED" : "FAILED";
-      await this.actions.updateOne({ _id: revert._id, organizationId }, { $set: { status, upstreamResponse: this.safeUpstream(upstream), verificationResult: { matched, keys, expected, actual }, executedAt: new Date(), completedAt: new Date(), ...(matched ? { verifiedAt: new Date() } : {}) } });
+      await this.actions.updateOne({ _id: revert._id, organizationId }, { $set: { status, upstreamResponse: this.safeUpstream(upstream), verificationResult: { matched, keys, expected, actual, sync:syncResult }, executedAt: new Date(), completedAt: new Date(), ...(matched ? { verifiedAt: new Date() } : {}) } });
       if (matched) await this.actions.updateOne({ _id: original._id, organizationId }, { $set: { status: "REVERTED" } });
       await this.audits.create({ organizationId, actorUserId: new Types.ObjectId(actor.sub), actor: actor.name, action: "revert_revenue_action", entityType: "revenue_action", entityId: String(revert._id), before: revert.baselineState, after: actual, source: "Wheelhouse RM API", verified: matched });
       return { ...this.serializeAction(revert), status, verificationResult: { matched, keys, expected, actual } };
@@ -654,10 +836,11 @@ export class RevenueService {
     entity.explanation = entity.explanation || entity.rootCause || evidence.explanation || entity.detectionSource || entity.cause || entity.title || "Kivora detected a material change that needs review.";
     entity.affectedDates = entity.affectedDates?.length ? entity.affectedDates : evidence.affectedDates || [];
     entity.impactCalculation = entity.impactCalculation || evidence.impactCalculation;
-    const scope=await this.scope(actor).catch(()=>({credential:undefined,connectionId:undefined,portfolioId:undefined}));const latestSimulation:any=simulations[0];const canApprove=["owner","administrator","revenue_manager"].includes(actor.organizationRole)&&recommendation&&new Date(recommendation.expiresAt)>new Date();return { kind, entity: this.serializeDocument(entity), recommendation: recommendation ? this.serializeDocument(recommendation) : null, simulations: simulations.map((item: any) => this.serializeDocument(item)), actions: actions.map((item: any) => this.serializeDocument(item)), outcomes: outcomes.map((item: any) => this.serializeDocument(item)), activity, comments, signals,capabilities:{canApprove:Boolean(canApprove),canExecute:Boolean(canApprove&&latestSimulation&&new Date(latestSimulation.expiresAt)>new Date()&&recommendation.proposedAction!=="manual_review"&&this.wheelhouse.capabilities(scope.credential).writeActions),simulationFresh:Boolean(latestSimulation&&new Date(latestSimulation.expiresAt)>new Date()),recommendationFresh:Boolean(recommendation&&new Date(recommendation.expiresAt)>new Date()),writeAccess:this.wheelhouse.capabilities(scope.credential).writeAccess} };
+    const scope=await this.scope(actor).catch(()=>({credential:undefined,connectionId:undefined,portfolioId:undefined}));const intendedStrategy=recommendedPricingStrategy(recommendation,entity);const selectedSimulation:any=simulations.find((item:any)=>item.selectedStrategy===intendedStrategy)||simulations[0];const canApprove=["owner","administrator","revenue_manager"].includes(actor.organizationRole)&&recommendation&&new Date(recommendation.expiresAt)>new Date();const wheelhouseCapability=this.scopedWheelhouseCapabilities(scope);return { kind, entity: this.serializeDocument(entity), recommendation: recommendation ? this.serializeDocument(recommendation) : null, simulations: simulations.map((item: any) => this.serializeDocument(item)), selectedSimulation:selectedSimulation?this.serializeDocument(selectedSimulation):null,intendedStrategy, actions: actions.map((item: any) => this.serializeDocument(item)), outcomes: outcomes.map((item: any) => this.serializeDocument(item)), activity, comments, signals,capabilities:{canApprove:Boolean(canApprove),canExecute:Boolean(canApprove&&recommendation.status==="APPROVED"&&selectedSimulation&&new Date(selectedSimulation.expiresAt)>new Date()&&recommendation.proposedAction!=="manual_review"&&wheelhouseCapability.writeActions),simulationFresh:Boolean(selectedSimulation&&new Date(selectedSimulation.expiresAt)>new Date()),recommendationFresh:Boolean(recommendation&&new Date(recommendation.expiresAt)>new Date()),writeAccess:wheelhouseCapability.writeAccess} };
   }
 
   async assignWorkItem(kind: string, id: string, userId: string | undefined, actor: AuthenticatedUser) {
+    this.requireAnalyst(actor);
     if (!this.connection.db) throw new ServiceUnavailableException("Database unavailable"); const organizationId = new Types.ObjectId(actor.organizationId);
     if (userId) { if (!Types.ObjectId.isValid(userId) || !await this.connection.db.collection("memberships").findOne({ organizationId, userId: new Types.ObjectId(userId), status: "active" })) throw new BadRequestException("Assignee must be an active organization member"); }
     const model: any = kind === "incident" ? this.incidents : kind === "opportunity" ? this.opportunityRecords : null; if (!model) throw new BadRequestException("Unsupported work item kind");
@@ -668,12 +851,14 @@ export class RevenueService {
   }
 
   async commentOnWorkItem(kind: string, id: string, body: string, actor: AuthenticatedUser) {
+    this.requireAnalyst(actor);
     if (!this.collaboration) throw new ServiceUnavailableException("Comments unavailable"); const item = await this.workItem(kind, id, actor);
     const comment = await this.collaboration.create({ organizationId: new Types.ObjectId(actor.organizationId), entityType: kind, entityId: String(item.entity._id || item.entity.id), userId: new Types.ObjectId(actor.sub), body: body.trim() });
     await this.audits.create({ organizationId: new Types.ObjectId(actor.organizationId), actorUserId: new Types.ObjectId(actor.sub), actor: actor.name, action: "comment_added", entityType: kind, entityId: String(item.entity._id || item.entity.id), after: { commentId: String(comment._id) }, source: "Kivora", verified: true }); return this.serializeDocument(comment.toObject());
   }
 
   async simulateRecommendation(id: string, actor: AuthenticatedUser) {
+    this.requireAnalyst(actor);
     if (!this.recommendationRecords) throw new ServiceUnavailableException("Recommendations unavailable"); const recommendation = await this.recommendationRecords.findOne({ _id: this.objectId(id), organizationId: new Types.ObjectId(actor.organizationId), status: { $nin: ["DISMISSED", "EXPIRED", "CANCELLED", "COMPLETED"] }, expiresAt: { $gt: new Date() } }).lean();
     if (!recommendation) throw new ConflictException("Recommendation is unavailable or expired"); const listingId = recommendation.listingId || recommendation.listingIds?.[0]; if (!listingId) throw new BadRequestException("Recommendation has no listing target");
     return this.strategies(listingId, actor, id);
@@ -682,8 +867,9 @@ export class RevenueService {
   async executeRecommendation(id: string, simulationId: string, actor: AuthenticatedUser) {
     if (!this.recommendationRecords || !this.simulations || !this.actions) throw new ServiceUnavailableException("Recommendation execution unavailable");
     if (!["owner", "administrator", "revenue_manager"].includes(actor.organizationRole)) throw new ForbiddenException("Revenue manager permission is required"); const organizationId = new Types.ObjectId(actor.organizationId);
-    const recommendation = await this.recommendationRecords.findOne({ _id: this.objectId(id), organizationId, status: { $in: ["READY", "REVIEWED", "APPROVED"] }, expiresAt: { $gt: new Date() } }).lean(); if (!recommendation) throw new ConflictException("Recommendation is not approval-ready");
+    const recommendation = await this.recommendationRecords.findOne({ _id: this.objectId(id), organizationId, status: "APPROVED", expiresAt: { $gt: new Date() } }).lean(); if (!recommendation) throw new ConflictException("Recommendation must be approved before execution");
     const simulation = await this.simulations.findOne({ _id: this.objectId(simulationId), organizationId, recommendationId: recommendation._id, expiresAt: { $gt: new Date() } }).lean(); if (!simulation) throw new ConflictException("Simulation is expired or does not belong to this recommendation; refresh previews");
+    const sourceOpportunity:any=recommendation.opportunityId&&this.opportunityRecords?await this.opportunityRecords.findOne({_id:recommendation.opportunityId,organizationId}).lean():null;const intendedStrategy=recommendedPricingStrategy(recommendation,sourceOpportunity);if(intendedStrategy&&simulation.selectedStrategy!==intendedStrategy)throw new ConflictException(`The approved recommendation requires the ${intendedStrategy} preset; refresh and use its matching preview`);
     if (recommendation.proposedAction === "restore_dynamic_pricing" && recommendation.incidentId) { const incident = await this.incidents.findOne({ _id: recommendation.incidentId, organizationId }).lean(); if (!incident) throw new NotFoundException("Related incident not found"); return this.resolve(incident.externalId, actor); }
     if (recommendation.proposedAction !== "apply_pricing_preset") throw new ConflictException("This recommendation has no supported automatic Wheelhouse action");
     let scope = await this.scope(actor); const listings = recommendation.listingIds?.length ? recommendation.listingIds : recommendation.listingId ? [recommendation.listingId] : []; if (!listings.length) throw new BadRequestException("Recommendation has no listing targets");const targetMapping:any=await this.connection.db!.collection("listingmappings").findOne({organizationId,externalListingId:listings[0],active:true});if(!targetMapping)throw new ConflictException("Active organization listing mapping not found");if(String(targetMapping.connectionId)!==scope.connectionId){const selected=await this.connectionService!.credential(actor,String(targetMapping.connectionId));scope={credential:selected.credential,connectionId:String(targetMapping.connectionId),portfolioId:String(targetMapping.portfolioId)};}
@@ -693,18 +879,18 @@ export class RevenueService {
     await this.recommendationRecords.updateOne({ _id: recommendation._id, organizationId }, { $set: { status: "EXECUTING" }, $push: { transitions: { from: recommendation.status, to: "EXECUTING", actorUserId: actor.sub, actor: actor.name, at: new Date() } } });
     const children = [];
     for (const listingId of listings) { try { children.push(await this.applyStrategy(listingId, simulation.selectedStrategy as any, actor, { recommendationId: recommendation._id, simulationId: simulation._id, parentActionId: parent._id, connectionId: new Types.ObjectId(scope.connectionId!) })); } catch (error) { children.push({ listingId, status: "FAILED", error: this.errorMessage(error) }); } }
-    const verified = children.filter((child: any) => child.status === "VERIFIED").length; const failed = children.length - verified; const status = failed === 0 ? "VERIFIED" : verified > 0 ? "PARTIALLY_APPLIED" : "FAILED";
-    await this.actions.updateOne({ _id: parent._id, organizationId }, { $set: { status, verificationResult: { total: children.length, verified, failed, children }, completedAt: new Date(), ...(status === "VERIFIED" ? { verifiedAt: new Date() } : {}) } });
+    const grouped=scheduledGroupResult(children,children.length);const {verified,applied,failed}=grouped;const status=grouped.status;
+    await this.actions.updateOne({ _id: parent._id, organizationId }, { $set: { status, verificationResult: { matched:status==="VERIFIED",total: children.length, verified, applied, failed, children }, completedAt: new Date(), ...(status === "VERIFIED" ? { verifiedAt: new Date() } : {}) } });
     await this.recommendationRecords.updateOne({ _id: recommendation._id, organizationId }, { $set: { status }, $push: { transitions: { from: "EXECUTING", to: status, actor: "system", at: new Date(), actionId: String(parent._id) } } });
-    if (verified > 0) await this.createOutcome(actor, parent._id, recommendation.evidence, recommendation.estimatedImpact, recommendation.currency, false);
+    if (status === "VERIFIED") await this.createOutcome(actor, parent._id, recommendation.evidence, recommendation.estimatedImpact, recommendation.currency, false);
     const parentOutcome = this.outcomes ? await this.outcomes.findOne({ organizationId, actionId: parent._id }).lean() : null;
     if (recommendation.opportunityId && this.opportunityRecords) await this.opportunityRecords.updateOne({ _id: recommendation.opportunityId, organizationId }, { $set: { status: status === "VERIFIED" ? "approved" : "under_review", simulationId: simulation._id, actionId: parent._id, ...(parentOutcome ? { outcomeId: parentOutcome._id } : {}) } });
-    await this.notify(actor, "action_result", `action:${parent._id}:${status}`, status === "VERIFIED" ? "Revenue action verified" : "Revenue action needs attention", `${verified} of ${children.length} listing actions verified.`, status === "VERIFIED" ? "success" : "warning", { actionId: String(parent._id), recommendationId: id });
+    await this.notify(actor, "action_result", `action:${parent._id}:${status}`, status === "VERIFIED" ? "Revenue action verified" : status === "APPLIED" ? "Revenue action applied; verification unavailable" : "Revenue action needs attention", `${verified} verified, ${applied} applied without read-back verification, and ${failed} failed of ${children.length}.`, status === "VERIFIED" ? "success" : "warning", { actionId: String(parent._id), recommendationId: id });
     return { ...this.serializeAction(parent), status, children };
   }
 
-  async listNotifications(actor: AuthenticatedUser) { return this.notifications ? this.notifications.find({ organizationId: new Types.ObjectId(actor.organizationId), channel: "in_app" }).sort({ createdAt: -1 }).limit(100).lean() : []; }
-  async readNotification(id: string, actor: AuthenticatedUser) { if (!this.notifications) throw new ServiceUnavailableException("Notifications unavailable"); const updated = await this.notifications.findOneAndUpdate({ _id: this.objectId(id), organizationId: new Types.ObjectId(actor.organizationId), channel: "in_app" }, { $set: { readAt: new Date() } }, { returnDocument: "after" }).lean(); if (!updated) throw new NotFoundException("Notification not found"); return updated; }
+  async listNotifications(actor: AuthenticatedUser) { return this.notifications ? this.notifications.find({ organizationId: new Types.ObjectId(actor.organizationId), channel: "in_app",$or:[{userId:new Types.ObjectId(actor.sub)},{userId:{$exists:false}}] }).sort({ createdAt: -1 }).limit(100).lean() : []; }
+  async readNotification(id: string, actor: AuthenticatedUser) { if (!this.notifications) throw new ServiceUnavailableException("Notifications unavailable"); const updated = await this.notifications.findOneAndUpdate({ _id: this.objectId(id), organizationId: new Types.ObjectId(actor.organizationId), channel: "in_app",$or:[{userId:new Types.ObjectId(actor.sub)},{userId:{$exists:false}}] }, { $set: { readAt: new Date() } }, { returnDocument: "after" }).lean(); if (!updated) throw new NotFoundException("Notification not found"); return updated; }
 
   async operationalSummary(actor: AuthenticatedUser) {
     const organizationId = new Types.ObjectId(actor.organizationId); const start = new Date(); start.setHours(0, 0, 0, 0);
@@ -738,10 +924,10 @@ export class RevenueService {
             try{childResults.push(await this.applyStrategy(listingId,simulation.selectedStrategy,actor,{recommendationId:recommendation._id,simulationId:simulation._id,parentActionId:action._id,connectionId:action.connectionId}));}catch(error){childResults.push({listingId,status:"FAILED",error:this.errorMessage(error)});}
           }
           const grouped=scheduledGroupResult(childResults,targets.length);const verifiedCount=grouped.verified;const finalStatus=grouped.status;
-          await this.actions.updateOne({_id:action._id,organizationId:action.organizationId},{$set:{status:finalStatus,verificationResult:{matched:finalStatus==="VERIFIED",total:targets.length,verified:verifiedCount,children:childResults},completedAt:new Date(),...(finalStatus==="VERIFIED"?{verifiedAt:new Date()}:{})}});
+          await this.actions.updateOne({_id:action._id,organizationId:action.organizationId},{$set:{status:finalStatus,verificationResult:{matched:finalStatus==="VERIFIED",total:targets.length,verified:verifiedCount,applied:grouped.applied,failed:grouped.failed,cancelled:grouped.cancelled,children:childResults},completedAt:new Date(),...(finalStatus==="VERIFIED"?{verifiedAt:new Date()}:{})}});
           await this.recommendationRecords.updateOne({_id:recommendation._id,organizationId:action.organizationId},{$set:{status:finalStatus,decisionReason:finalStatus==="CANCELLED"?"Portfolio state changed before execution":undefined},$push:{transitions:{from:"SCHEDULED",to:finalStatus,actor:"system",at:new Date(),actionId:String(action._id)}}});
-          if(verifiedCount>0) await this.createOutcome(actor,action._id,recommendation.evidence,recommendation.estimatedImpact,recommendation.currency,false);
-          await this.notify(actor,"scheduled_action_result",`scheduled:${action._id}:${finalStatus}`,finalStatus==="VERIFIED"?"Scheduled preset verified":"Scheduled preset needs attention",`${verifiedCount} of ${targets.length} listing actions verified.`,finalStatus==="VERIFIED"?"success":"warning",{actionId:String(action._id),children:childResults});
+          if(finalStatus==="VERIFIED") await this.createOutcome(actor,action._id,recommendation.evidence,recommendation.estimatedImpact,recommendation.currency,false);
+          await this.notify(actor,"scheduled_action_result",`scheduled:${action._id}:${finalStatus}`,finalStatus==="VERIFIED"?"Scheduled preset verified":finalStatus==="APPLIED"?"Scheduled preset applied; verification unavailable":"Scheduled preset needs attention",`${verifiedCount} verified, ${grouped.applied} applied without read-back verification, and ${grouped.failed} failed of ${targets.length}.`,finalStatus==="VERIFIED"?"success":"warning",{actionId:String(action._id),children:childResults});
           await this.telegram.notifyActionResult(actor.organizationId,String(action._id),finalStatus,verifiedCount,targets.length).catch(()=>undefined); if(verifiedCount>0)executed++;
           continue;
         }
@@ -750,10 +936,10 @@ export class RevenueService {
         const current = await this.wheelhouse.preferences(listingId, mapping.channel, credential); const evidenceRate = Number((recommendation.evidence as any)?.currentRate);
         if (Number.isFinite(evidenceRate) && Math.abs(Number(current.base_price || 0) - evidenceRate) > 1) { await this.cancelScheduledExecution(action,recommendation,"Evidence became stale before scheduled execution",actor); continue; }
         if (action.actionType !== "restore_dynamic_pricing") { await this.actions.updateOne({ _id: action._id }, { $set: { status: "FAILED", completedAt: new Date(), errorDetails: { reason: "Scheduled action type is not supported by the live Wheelhouse adapter" } } }); continue; }
-        const proposed = { ...current, base_price: null, automatic_rate_posting_enabled: true }; const upstream=await this.wheelhouse.updatePreferences(listingId, mapping.channel, proposed, credential); await this.wheelhouse.enableAutomaticPosting(listingId, mapping.channel, credential); await this.wheelhouse.sync(listingId, mapping.channel, credential); const verified = await this.wheelhouse.preferences(listingId, mapping.channel, credential); const matched=verified.base_price===null||verified.base_price===undefined;
-        await this.actions.updateOne({ _id: action._id }, { $set: { status:matched?"VERIFIED":"FAILED",upstreamResponse:this.safeUpstream(upstream),verifiedAt:matched?new Date():undefined,completedAt:new Date(),verificationResult:{matched,expected:{base_price:null,automatic_rate_posting_enabled:true},actual:verified}}});
+        const proposed = { ...current, base_price: null, automatic_rate_posting_enabled: true }; const upstream=await this.wheelhouse.updatePreferences(listingId, mapping.channel, proposed, credential); await this.wheelhouse.enableAutomaticPosting(listingId, mapping.channel, credential); await this.markConnectionWriteVerified(actor,String(action.connectionId)); const syncResult=await this.requestWheelhouseSync(listingId,mapping.channel,credential); const verified = await this.wheelhouse.preferences(listingId, mapping.channel, credential); const matched=verified.base_price===null||verified.base_price===undefined;
+        await this.actions.updateOne({ _id: action._id }, { $set: { status:matched?"VERIFIED":"FAILED",upstreamResponse:this.safeUpstream(upstream),verifiedAt:matched?new Date():undefined,completedAt:new Date(),verificationResult:{matched,expected:{base_price:null,automatic_rate_posting_enabled:true},actual:verified,sync:syncResult}}});
         await this.recommendationRecords.updateOne({_id:recommendation._id},{$set:{status:matched?"VERIFIED":"FAILED"},$push:{transitions:{from:"SCHEDULED",to:matched?"VERIFIED":"FAILED",actor:"system",at:new Date()}}}); if(matched){await this.createOutcome(actor,action._id,current,recommendation.estimatedImpact,recommendation.currency);executed++;} await this.notify(actor,"scheduled_action_result",`scheduled:${action._id}:${matched}`,matched?"Scheduled action verified":"Scheduled action verification failed",matched?"Wheelhouse state matched the approved change.":"Wheelhouse state did not match the approved change.",matched?"success":"error",{actionId:String(action._id)}); await this.telegram.notifyActionResult(actor.organizationId,String(action._id),matched?"VERIFIED":"FAILED",matched?1:0,1).catch(()=>undefined);
-      } catch (error) { await this.actions.updateOne({ _id: action._id }, { $set: { status: "FAILED", completedAt: new Date(), errorDetails: { message: this.errorMessage(error), classification:"execution_error" } } }); }
+      } catch (error) { const reason=this.errorMessage(error);await this.actions.updateOne({ _id: action._id }, { $set: { status: "FAILED", completedAt: new Date(), errorDetails: { message: reason, classification:"execution_error" } } });if(action.recommendationId)await this.recommendationRecords.updateOne({_id:action.recommendationId,organizationId:action.organizationId,status:{$in:["SCHEDULED","EXECUTING"]}},{$set:{status:"FAILED",decisionReason:reason},$push:{transitions:{from:"SCHEDULED",to:"FAILED",actor:"system",at:new Date(),reason,actionId:String(action._id)}}}); }
       finally { await this.releaseLock(key, owner); }
     }
     this.metrics?.increment("scheduled_actions_executed_total", {}, executed); return { due: due.length, executed };
@@ -774,6 +960,7 @@ export class RevenueService {
   }
 
   async editReport(id: string, body: string, actor: AuthenticatedUser) {
+    if(!["owner","administrator","revenue_manager","analyst"].includes(actor.organizationRole))throw new ForbiddenException("Report editor permission is required");
     const report: any = await this.reports.findOne({ _id: this.objectId(id), organizationId: new Types.ObjectId(actor.organizationId), status: "draft" }).lean();
     if (!report) throw new ConflictException("Only an organization-scoped draft report can be edited");
     const updated = await this.reports.findOneAndUpdate({ _id: report._id, organizationId: report.organizationId, status: "draft", version: report.version }, { $set: { body }, $inc: { version: 1 }, $push: { versions: { version: report.version, body: report.body, savedAt: new Date(), savedBy: actor.sub } } }, { returnDocument: "after" }).lean();
@@ -789,6 +976,7 @@ export class RevenueService {
   }
 
   async deliverReport(id: string, actor: AuthenticatedUser) {
+    if(!["owner","administrator","revenue_manager"].includes(actor.organizationRole))throw new ForbiddenException("Revenue manager permission is required");
     const report: any = await this.reports.findOne({ _id: this.objectId(id), organizationId: new Types.ObjectId(actor.organizationId), status: { $in: ["ready", "shared"] } }).lean();
     if (!report) throw new ConflictException("Only a finalized organization-scoped report can be delivered");
     const attemptedAt = new Date();
@@ -802,11 +990,11 @@ export class RevenueService {
   async scanAllOrganizations() {
     if (!this.connectionService) return this.scanPortfolio();
     const collection = this.connection.db!.collection("wheelhouseconnections");
-    const active = await collection.find({ status: { $ne: "revoked" } }, { projection: { organizationId: 1, createdBy: 1 } }).toArray();
+    const active = await collection.find({ status: { $ne: "revoked" } }, { projection: { _id: 1, organizationId: 1, createdBy: 1 } }).toArray();
     const results = [];
     for (const connection of active) {
       const actor = { sub: String(connection.createdBy), privyUserId: "system", name: "Kivora scanner", role: "admin", organizationId: String(connection.organizationId), organizationRole: "administrator" } as AuthenticatedUser;
-      try { results.push({ organizationId: actor.organizationId, ...(await this.scanPortfolio(actor)) }); }
+      try { results.push({ organizationId: actor.organizationId, connectionId: String(connection._id), ...(await this.scanPortfolio(actor, String(connection._id))) }); }
       catch (error) { results.push({ organizationId: actor.organizationId, error: this.errorMessage(error) }); }
     }
     return results;
@@ -827,11 +1015,74 @@ export class RevenueService {
   async endOfDayAllOrganizations(){if(!this.connectionService)return[];const rows=await this.connection.db!.collection<any>("wheelhouseconnections").find({status:{$ne:"revoked"}}).toArray();const unique=new Map(rows.map(row=>[String(row.organizationId),row]));const output=[];for(const row of unique.values()){const actor={sub:String(row.createdBy),privyUserId:"system",name:"Kivora outcome worker",role:"admin",organizationId:String(row.organizationId),organizationRole:"administrator"}as AuthenticatedUser;try{if(!await this.organizationLocalHour(actor.organizationId,20))continue;const summary=await this.operationalSummary(actor);output.push({organizationId:actor.organizationId,...await this.telegram.broadcastEndOfDay(actor.organizationId,summary)});}catch(error){output.push({organizationId:actor.organizationId,error:this.errorMessage(error)});}}return output;}
   private async organizationLocalHour(organizationId:string,hour:number){const org:any=await this.connection.db!.collection("organizations").findOne({_id:new Types.ObjectId(organizationId)});try{return Number(new Intl.DateTimeFormat("en-GB",{timeZone:org?.defaultTimezone||"UTC",hour:"2-digit",hour12:false}).format(new Date()))===hour;}catch{return false;}}
 
-  private async scope(actor?: AuthenticatedUser) {
+  private async scope(actor?: AuthenticatedUser, connectionId?: string) {
     if (!actor || !this.connectionService) return { credential: undefined as string | undefined, connectionId: undefined as string | undefined, portfolioId: undefined as string | undefined };
-    const { connection, credential } = await this.connectionService.credential(actor);
+    const { connection, credential } = await this.connectionService.credential(actor, connectionId);
     const portfolio = await this.connection.db!.collection("portfolios").findOne({ organizationId: new Types.ObjectId(actor.organizationId), connectionId: connection._id, status: "active" }, { projection: { _id: 1 } });
-    return { credential, connectionId: String(connection._id), portfolioId: portfolio ? String(portfolio._id) : undefined };
+    return { credential, connectionId: String(connection._id), portfolioId: portfolio ? String(portfolio._id) : undefined, writeCapability: Boolean(connection.writeCapability) };
+  }
+  private async synchronizeListingMappings(
+    actor: AuthenticatedUser,
+    listings: WheelhouseListing[],
+    connectionId?: string,
+    portfolioId?: string,
+  ) {
+    if (!this.connection.db || !connectionId || !listings.length) return;
+    const organizationId = new Types.ObjectId(actor.organizationId);
+    const connectionObjectId = new Types.ObjectId(connectionId);
+    let resolvedPortfolioId = portfolioId ? new Types.ObjectId(portfolioId) : undefined;
+    if (!resolvedPortfolioId) {
+      const portfolio = await this.connection.db.collection("portfolios").findOne({ organizationId, connectionId: connectionObjectId, status: "active" }, { projection: { _id: 1 } });
+      resolvedPortfolioId = portfolio?._id;
+    }
+    if (!resolvedPortfolioId) return;
+    const synchronizedAt = new Date();
+    await this.connection.db.collection("listingmappings").bulkWrite(listings.map((listing) => ({
+      updateOne: {
+        filter: { organizationId, connectionId: connectionObjectId, externalListingId: listing.id, channel: listing.channel },
+        update: {
+          $set: {
+            name: listing.nickname || listing.title || listing.id,
+            market: listing.location?.address || listing.location?.country,
+            currency: listing.currency || "USD",
+            source: JSON.parse(JSON.stringify(listing)),
+            lastSynchronizedAt: synchronizedAt,
+            active: listing.is_active !== false,
+          },
+          $setOnInsert: {
+            organizationId,
+            connectionId: connectionObjectId,
+            portfolioId: resolvedPortfolioId,
+            externalListingId: listing.id,
+            channel: listing.channel,
+            includedInReporting: true,
+            propertyProfiles: [],
+            assigneeIds: [],
+          },
+        },
+        upsert: true,
+      },
+    })), { ordered: false });
+  }
+  private async ensureListingMapping(actor: AuthenticatedUser, listingId: string) {
+    if (!this.connection.db) return;
+    const organizationId = new Types.ObjectId(actor.organizationId);
+    if (await this.connection.db.collection("listingmappings").findOne({ organizationId, externalListingId: listingId, active: true }, { projection: { _id: 1 } })) return;
+    const scope = await this.scope(actor);
+    const cached = this.listingsFor(actor).find((listing) => listing.id === listingId);
+    if (cached) {
+      await this.synchronizeListingMappings(actor, [cached], scope.connectionId, scope.portfolioId);
+      return;
+    }
+    const snapshot: any = await this.snapshots.findOne({ organizationId, listingId }).sort({ createdAt: -1 }).lean();
+    if (snapshot?.channel) {
+      const incident: any = await this.incidents.findOne({ organizationId, listingId }).sort({ createdAt: -1 }).lean();
+      await this.synchronizeListingMappings(actor, [{ id: listingId, channel: snapshot.channel, title: incident?.listing || listingId }], scope.connectionId, scope.portfolioId);
+      return;
+    }
+    const live = await this.wheelhouse.listings(scope.credential);
+    this.setListings(actor, live);
+    await this.synchronizeListingMappings(actor, live, scope.connectionId, scope.portfolioId);
   }
   private tenantKey(actor?: AuthenticatedUser) { return actor?.organizationId || "legacy"; }
   private orgScope(actor?: AuthenticatedUser) { return actor?.organizationId ? { organizationId: new Types.ObjectId(actor.organizationId) } : {}; }
@@ -841,7 +1092,11 @@ export class RevenueService {
   private setIncidents(actor: AuthenticatedUser | undefined, incidents: LiveIncident[]) { if (actor) this.tenantIncidents.set(this.tenantKey(actor), incidents); else this.incidentsCache = incidents; }
   private lastScanFor(actor?: AuthenticatedUser) { return actor ? this.tenantLastScan.get(this.tenantKey(actor)) : this.lastScan; }
   private objectId(value: string) { if (!Types.ObjectId.isValid(value)) throw new BadRequestException("Resource identifier is invalid"); return new Types.ObjectId(value); }
+  private requireAnalyst(actor: AuthenticatedUser) { if (!["owner", "administrator", "revenue_manager", "analyst"].includes(actor.organizationRole)) throw new ForbiddenException("Analyst permission is required"); }
+  private scopedWheelhouseCapabilities(scope: { credential?: string; writeCapability?: boolean }) { const capability = this.wheelhouse.capabilities(scope.credential); return scope.writeCapability && capability.writeAccess === "unverified" ? { ...capability, writeAccess: "verified", writeActions: true } : capability; }
+  private async markConnectionWriteVerified(actor?: AuthenticatedUser, connectionId?: string) { if (!actor || !connectionId || !this.connection.db) return; await this.connection.db.collection("wheelhouseconnections").updateOne({ _id: new Types.ObjectId(connectionId), organizationId: new Types.ObjectId(actor.organizationId), status: { $ne: "revoked" } }, { $set: { writeCapability: true, supportedMutationTypes: ["pricing_preset", "remove_base_price_override", "automatic_rate_posting", "listing_sync"], lastSuccessfulSynchronization: new Date() } }); }
   private errorMessage(error: unknown) { return error instanceof Error ? error.message.slice(0, 500) : "Operation failed"; }
+  private async requestWheelhouseSync(listingId:string,channel:string,credential?:string){try{return{queued:true,response:this.safeUpstream(await this.wheelhouse.sync(listingId,channel,credential))};}catch(error){if(error instanceof HttpException&&[423,429].includes(error.getStatus()))return{queued:false,deferred:true,upstreamStatus:error.getStatus(),reason:error.getStatus()===423?"A recent Wheelhouse sync is already queued":"Wheelhouse daily sync allowance is unavailable; the pricing setting was still saved"};throw error;}}
   private safeUpstream(value: unknown) { return value && typeof value === "object" ? value as Record<string, unknown> : { acknowledged: value !== undefined }; }
   private serializeDocument(value: any) {
     if (!value) return value;
@@ -861,7 +1116,7 @@ export class RevenueService {
     );
   }
   private serializeAction(action: any) { return { ...action, id: String(action._id), organizationId: String(action.organizationId), connectionId: String(action.connectionId) }; }
-  private serializeOpportunity(row: any, listingNames = new Map<string, string>()) { const ids: string[] = row.listingIds?.length ? row.listingIds : row.listingId ? [row.listingId] : []; const resolved = ids.map((id) => listingNames.get(id)).filter((name): name is string => Boolean(name)); const property = resolved.length === 1 ? resolved[0] : resolved.length > 1 ? `${resolved[0]} + ${resolved.length - 1} more` : ids.length > 1 ? `${ids.length} connected properties` : "Connected property"; return { id: String(row._id), property, listingId: row.listingId, action: row.suggested?.action || row.type, impact: row.projectedRevenueGain, confidence: row.confidence, tag: row.riskLevel, status: row.status, category: row.type, discoveredAt: row.createdAt, expiresAt: row.expiresAt, currentState: JSON.stringify(row.baseline), proposedState: JSON.stringify(row.suggested), evidence: row.evidence, affectedListings: row.listingIds?.length || (row.listingId ? 1 : 0) }; }
+  private serializeOpportunity(row: any, listingNames = new Map<string, string>(), lifecycleStatus?: string) { const ids: string[] = row.listingIds?.length ? row.listingIds : row.listingId ? [row.listingId] : []; const resolved = ids.map((id) => listingNames.get(id)).filter((name): name is string => Boolean(name)); const property = resolved.length === 1 ? resolved[0] : resolved.length > 1 ? `${resolved[0]} + ${resolved.length - 1} more` : ids.length > 1 ? `${ids.length} connected properties` : "Connected property"; return { id: String(row._id), property, listingId: row.listingId, action: row.suggested?.action || row.type, impact: row.projectedRevenueGain, confidence: row.confidence, tag: row.riskLevel, status: lifecycleStatus || row.status, opportunityStatus: row.status, lifecycleStatus: lifecycleStatus || (row.status === "completed" ? "COMPLETED" : row.status === "expired" ? "EXPIRED" : "READY"), category: row.type, discoveredAt: row.createdAt, expiresAt: row.expiresAt, currentState: JSON.stringify(row.baseline), proposedState: JSON.stringify(row.suggested), evidence: row.evidence, affectedListings: row.listingIds?.length || (row.listingId ? 1 : 0) }; }
   private async opportunityListingNames(rows: any[], actor: AuthenticatedUser) { const live = new Map(this.listingsFor(actor).map((listing) => [listing.id, listing.nickname || listing.title || ""])); if (!this.connection.db) return live; const ids = [...new Set(rows.flatMap((row) => row.listingIds?.length ? row.listingIds : row.listingId ? [row.listingId] : []).filter(Boolean))]; if (!ids.length) return live; const mappings = await this.connection.db.collection("listingmappings").find({ organizationId: new Types.ObjectId(actor.organizationId), externalListingId: { $in: ids }, active: true }).project({ externalListingId: 1, name: 1 }).toArray(); for (const mapping of mappings) if (mapping.name && !live.get(mapping.externalListingId)) live.set(mapping.externalListingId, mapping.name); return live; }
   private priorityScore(item: any) { const impact = Math.min(50, Math.max(0, Number(item.impact || 0) / 200)); const confidence = Math.max(0, Math.min(100, Number(item.confidence || 0))) * 0.25; const severity = item.severity === "Critical" ? 20 : item.severity === "Warning" ? 10 : 0; const urgency = item.expiresAt ? Math.max(0, 15 - (new Date(item.expiresAt).getTime() - Date.now()) / 86_400_000) : 5; return Number((impact + confidence + severity + urgency).toFixed(2)); }
   private signalType(cause: string) { return cause.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""); }

@@ -1,10 +1,15 @@
 import { ServiceUnavailableException } from "@nestjs/common";
+import { Types } from "mongoose";
+import { ConnectionService } from "./connection.service";
 import { RevenueService } from "./revenue.service";
 
 describe("RevenueService audit rules", () => {
   const wheelhouse = {
     preferences: jest.fn(), recommendations: jest.fn(), kpis: jest.fn(),
-    recentChanges: jest.fn(), flags: jest.fn(),
+    recentChanges: jest.fn(), flags: jest.fn(), listing: jest.fn(), pricingTier: jest.fn(),
+    monthlyKpis: jest.fn(), neighborhoodOccupancy: jest.fn(), reservations: jest.fn(),
+    basePriceHistory: jest.fn(), checkinCheckout: jest.fn(), minMaxPrices: jest.fn(),
+    monthlySeasonality: jest.fn(),
   };
   const snapshots = { create: jest.fn().mockResolvedValue({}), findOne: jest.fn(() => ({ sort: jest.fn(() => ({ lean: jest.fn().mockResolvedValue(null) })) })) };
   const groq = { answer: jest.fn() };
@@ -44,6 +49,27 @@ describe("RevenueService audit rules", () => {
     wheelhouse.preferences.mockResolvedValue({ base_price: 190, automatic_rate_posting_enabled: true });
     wheelhouse.kpis.mockResolvedValue({ occupancy: { "0_30": 0.65 }, occupancy_neighborhood: { "0_30": 0.7 } });
     await expect((service as any).analyzeListing(listing)).resolves.toBeNull();
+  });
+
+  it("stores trailing KPIs for historical dashboard labels and keeps forward occupancy separate", async () => {
+    wheelhouse.preferences.mockResolvedValue({ base_price: 190, automatic_rate_posting_enabled: true });
+    wheelhouse.kpis.mockResolvedValue({
+      occupancy: { "0_30": 0.1, "30_0": 0.63 },
+      revenue: { "0_30": 0, "30_0": 2439 },
+      adr: { "0_30": 0, "30_0": 128.37 },
+      revpar: { "0_30": 0, "30_0": 81.28 },
+      occupancy_neighborhood: { "0_30": 0.12 },
+    });
+
+    await (service as any).analyzeListing(listing);
+
+    expect(snapshots.create).toHaveBeenCalledWith(expect.objectContaining({
+      occupancy: 0.63,
+      forwardOccupancy: 0.1,
+      revenue: 2439,
+      adr: 128.37,
+      revpar: 81.28,
+    }));
   });
 
   it("blocks pricing previews for operational incidents", async () => {
@@ -98,5 +124,51 @@ describe("RevenueService audit rules", () => {
       }),
     );
     dashboard.mockRestore();
+  });
+
+  it("keeps the listing workspace usable when an optional Wheelhouse feed is unavailable", async () => {
+    const actor = { sub: "507f1f77bcf86cd799439011", organizationId: "507f191e810c19729de860ea", organizationRole: "analyst" };
+    jest.spyOn(service, "listingWorkspace").mockResolvedValue({
+      listing: { id: "listing-1", name: "Ocean View", channel: "direct", connection: { id: "connection-1" } },
+      performance: { current: null, history: [] },
+      pricing: { preferences: {}, recommendations: { data: [] }, neighborhood: null, recentChanges: {} },
+      intelligence: {},
+      operations: {},
+      capabilities: {},
+    } as never);
+    (service as any).connectionService = { credential: jest.fn().mockResolvedValue({ credential: "organization-key" }) };
+    wheelhouse.listing.mockResolvedValue({ id: "listing-1", channel: "direct", nickname: "Ocean View" });
+    wheelhouse.pricingTier.mockResolvedValue({ name: "Pro", horizon: 540 });
+    wheelhouse.kpis.mockResolvedValue({ occupancy: { "0_30": 0.7 } });
+    wheelhouse.monthlyKpis.mockRejectedValue(new Error("not available"));
+    wheelhouse.neighborhoodOccupancy.mockResolvedValue({ data: [] });
+    wheelhouse.reservations.mockResolvedValue([]);
+    wheelhouse.flags.mockResolvedValue([]);
+    wheelhouse.basePriceHistory.mockResolvedValue([]);
+    wheelhouse.checkinCheckout.mockResolvedValue({ data: [] });
+    wheelhouse.minMaxPrices.mockResolvedValue({ data: [] });
+    wheelhouse.monthlySeasonality.mockResolvedValue({ CON: {}, REC: {}, AGG: {} });
+
+    const workspace = await service.listingWorkspaceDepth("listing-1", actor as never);
+
+    expect(workspace.performance.rolling).toEqual({ occupancy: { "0_30": 0.7 } });
+    expect(workspace.performance.monthly).toBeNull();
+    expect(workspace.liveData.unavailable).toEqual(expect.arrayContaining(["monthly_kpis", "neighborhood_pricing"]));
+    expect(workspace.liveData.available).toEqual(expect.arrayContaining(["rolling_kpis", "reservations"]));
+  });
+});
+
+describe("ConnectionService capability verification", () => {
+  it("persists verified write capability after a successful live connection test", async () => {
+    const organizationId = new Types.ObjectId(); const connectionId = new Types.ObjectId();
+    const connection = { _id: connectionId, organizationId, encryptedCredential: "encrypted" };
+    const connections = { findOne: jest.fn(() => ({ select: jest.fn(() => ({ sort: jest.fn(() => ({ lean: jest.fn().mockResolvedValue(connection) })) })) })), updateOne: jest.fn().mockResolvedValue({ acknowledged: true }) };
+    const wheelhouse = { listings: jest.fn().mockResolvedValue([]), capabilities: jest.fn().mockReturnValue({ writeAccess: "verified" }) };
+    const service = new ConnectionService({ get: jest.fn() } as never, wheelhouse as never, connections as never, {} as never, { bulkWrite: jest.fn() } as never, {} as never, {} as never);
+    jest.spyOn(service as any, "decrypt").mockReturnValue("live-key");
+
+    await service.test({ sub: String(new Types.ObjectId()), organizationId: String(organizationId), organizationRole: "administrator" } as never, String(connectionId));
+
+    expect(connections.updateOne).toHaveBeenCalledWith(expect.objectContaining({ _id: connectionId, organizationId }), expect.objectContaining({ $set: expect.objectContaining({ status: "connected", readCapability: true, writeCapability: true, supportedMutationTypes: expect.arrayContaining(["pricing_preset", "automatic_rate_posting"]) }) }));
   });
 });

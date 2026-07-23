@@ -26,6 +26,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "helmet": "^8.3.0",
+    "ioredis": "^5.4.2",
     "mongoose": "^9.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
@@ -40,6 +41,7 @@
     "@typescript-eslint/parser": "^8.33.0",
     "eslint": "^9.28.0",
     "jest": "^30.2.0",
+    "nock": "^14.0.0",
     "prettier": "^3.5.3",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.5",

@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { getMarketIntelligence, refreshMarketIntelligence, QUERY_KEYS } from "@/lib/api";
+import Link from "next/link";
+import { getCapabilities, getMarketIntelligence, refreshMarketIntelligence, QUERY_KEYS } from "@/lib/api";
 import { Sparkles, CloudRain, RefreshCw, FlameKindling, MapPin } from "lucide-react";
 import { SourceBadge } from "@/components/ui/SourceBadge";
 import { ConfidenceIndicator } from "@/components/ui/ConfidenceIndicator";
@@ -15,6 +16,8 @@ export default function MarketIntelligencePage() {
     queryKey: QUERY_KEYS.marketIntelligence,
     queryFn: getMarketIntelligence,
   });
+  const capabilities = useQuery({ queryKey: QUERY_KEYS.capabilities, queryFn: getCapabilities });
+  const canAnalyze = Boolean(capabilities.data?.permissions?.canAnalyze);
 
   const refreshMutation = useMutation({
     mutationFn: refreshMarketIntelligence,
@@ -52,7 +55,8 @@ export default function MarketIntelligencePage() {
           </div>
 
           <button
-            disabled={refreshMutation.isPending}
+            disabled={!canAnalyze || refreshMutation.isPending}
+            title={canAnalyze ? "Refresh live demand signals" : "Analyst permission is required"}
             onClick={() => refreshMutation.mutate()}
             className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-bold text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
           >
@@ -85,15 +89,18 @@ export default function MarketIntelligencePage() {
             const isEvent = signal.kind === "event";
 
             return (
-              <article
+              <Link
                 key={signal.externalId}
-                className="card flex flex-col justify-between space-y-4 rounded-2xl p-4 transition-colors hover:border-white/15 sm:p-6"
+                href={`/dashboard/market/${encodeURIComponent(signal.externalId)}`}
+                id={`signal-${signal.externalId}`}
+                className="card group block scroll-mt-24 rounded-2xl p-4 transition-colors hover:border-white/15 hover:bg-white/2 focus-visible:border-accent/50 focus-visible:ring-2 focus-visible:ring-accent/20 sm:p-6"
               >
+                <article className="flex h-full flex-col justify-between space-y-4">
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <span
-                        className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl ${
+                        className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
                           isEvent ? "bg-amber-500/10 text-amber-400" : "bg-sky-500/10 text-sky-400"
                         }`}
                       >
@@ -138,7 +145,8 @@ export default function MarketIntelligencePage() {
                     </span>
                   )}
                 </div>
-              </article>
+                </article>
+              </Link>
             );
           })}
         </div>

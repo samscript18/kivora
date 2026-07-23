@@ -21,6 +21,7 @@ const money = (value: number | undefined) =>
 
 export default function OpportunitiesPage() {
   const [filterTag, setFilterTag] = useState<string>("all");
+  const [lifecycleFilter, setLifecycleFilter] = useState<string>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -31,13 +32,17 @@ export default function OpportunitiesPage() {
   const opportunities: Opportunity[] = data ?? [];
 
   const tags = Array.from(new Set(opportunities.map((o) => o.tag).filter(Boolean))) as string[];
+  const lifecycleStatuses = Array.from(new Set(opportunities.map((o) => o.lifecycleStatus || o.status).filter(Boolean))) as string[];
 
   const filtered = opportunities.filter((o) => {
-    if (filterTag === "all") return true;
-    return o.tag === filterTag;
+    const categoryMatches = filterTag === "all" || o.tag === filterTag;
+    const lifecycleMatches = lifecycleFilter === "all" || (o.lifecycleStatus || o.status) === lifecycleFilter;
+    return categoryMatches && lifecycleMatches;
   });
 
-  const totalUpside = opportunities.reduce((acc, curr) => acc + (curr.impact || 0), 0);
+  const totalUpside = filtered.reduce((acc, curr) => acc + (curr.impact || 0), 0);
+
+  const lifecycleLabel = (status: string) => status.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 
   return (
     <div className="dashboard-page space-y-6">
@@ -62,10 +67,27 @@ export default function OpportunitiesPage() {
       </div>
 
       {/* Filter Bar */}
-      {tags.length > 0 && (
-        <div className="card rounded-2xl p-4 flex items-center gap-2 overflow-x-auto scrollbar-none">
-          <Filter size={14} className="text-slate-500 flex-shrink-0" />
-          <span className="text-[11px] text-slate-500 flex-shrink-0">Category:</span>
+      {(tags.length > 0 || lifecycleStatuses.length > 0) && (
+        <div className="card rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+            <Filter size={14} className="text-slate-500 flex-shrink-0" />
+            <span className="text-[11px] text-slate-500 flex-shrink-0">Lifecycle:</span>
+            <button
+              onClick={() => setLifecycleFilter("all")}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold flex-shrink-0 transition-colors ${
+                lifecycleFilter === "all" ? "bg-accent/10 text-accent border border-accent/30" : "bg-elevated border border-border text-slate-400 hover:bg-white/5"
+              }`}
+            >
+              All ({opportunities.length})
+            </button>
+            {lifecycleStatuses.map((status) => (
+              <button key={status} onClick={() => setLifecycleFilter(status)} className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold flex-shrink-0 transition-colors ${lifecycleFilter === status ? "bg-accent/10 text-accent border border-accent/30" : "bg-elevated border border-border text-slate-400 hover:bg-white/5"}`}>
+                {lifecycleLabel(status)}
+              </button>
+            ))}
+          </div>
+          {tags.length > 0 && <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+          <span className="text-[11px] text-slate-500 flex-shrink-0">Risk:</span>
           <button
             onClick={() => setFilterTag("all")}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold capitalize flex-shrink-0 transition-colors ${
@@ -88,7 +110,7 @@ export default function OpportunitiesPage() {
             >
               {tag}
             </button>
-          ))}
+          ))}</div>}
         </div>
       )}
 
@@ -106,7 +128,7 @@ export default function OpportunitiesPage() {
           <EmptyState
             icon={TrendingUp}
             heading="No open opportunities"
-            body="No active revenue opportunities match the selected category filter."
+            body="No revenue opportunities match the selected lifecycle and risk filters."
           />
         </div>
       ) : (
@@ -126,6 +148,7 @@ export default function OpportunitiesPage() {
                       <h3 className="font-bold text-foreground text-sm leading-snug">{item.property}</h3>
                       <div className="flex items-center gap-2 mt-0.5">
                         {item.tag && <StatusBadge variant="opportunity" label={item.tag} />}
+                        {(item.lifecycleStatus || item.status) && <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-300">{lifecycleLabel(item.lifecycleStatus || item.status || "")}</span>}
                         <SourceBadge source="wheelhouse" />
                       </div>
                     </div>
@@ -170,7 +193,7 @@ export default function OpportunitiesPage() {
           ))}
         </div>
       )}
-      {selectedId && <WorkItemWorkspace kind="opportunity" id={selectedId} onClose={() => setSelectedId(null)} />}
+      {selectedId && <WorkItemWorkspace key={`opportunity:${selectedId}`} kind="opportunity" id={selectedId} onClose={() => setSelectedId(null)} />}
     </div>
   );
 }

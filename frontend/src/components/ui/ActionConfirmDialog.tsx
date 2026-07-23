@@ -2,6 +2,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, X } from "lucide-react";
 import { useEffect } from "react";
+import { ViewportPortal } from "./ViewportPortal";
 
 interface ActionConfirmDialogProps {
   open: boolean;
@@ -38,7 +39,7 @@ export function ActionConfirmDialog({
   }, [open, onClose]);
 
   return (
-    <AnimatePresence>
+    <ViewportPortal lockScroll={open}><AnimatePresence>
       {open && (
         <>
           <motion.div
@@ -111,6 +112,6 @@ export function ActionConfirmDialog({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence></ViewportPortal>
   );
 }

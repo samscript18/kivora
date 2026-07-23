@@ -11,12 +11,14 @@ import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import Link from "next/link";
 import type { Listing } from "@/types/api";
 
-const money = (value: number | undefined) =>
-  new Intl.NumberFormat("en-US", {
+const money = (value: number | undefined, currency = "USD") => {
+  if (value == null) return "—";
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency,
     maximumFractionDigits: 0,
-  }).format(value ?? 0);
+  }).format(value);
+};
 
 const pct = (value: number | undefined) => `${((value ?? 0) * 100).toFixed(1)}%`;
 
@@ -34,11 +36,11 @@ export default function ListingsPage() {
     return list.filter((item: Listing) => {
       const name = `${item.nickname || item.title || item.id} ${item.location?.address || ""} ${item.location?.city || ""}`.toLowerCase();
       const matchesSearch = name.includes(search.toLowerCase());
-      const isDynamic = Boolean(item.metrics?.dynamicPricingEnabled);
+      const isDynamic = item.metrics?.dynamicPricingEnabled;
 
       if (!matchesSearch) return false;
-      if (filterDynamic === "enabled") return isDynamic;
-      if (filterDynamic === "disabled") return !isDynamic;
+      if (filterDynamic === "enabled") return isDynamic === true;
+      if (filterDynamic === "disabled") return isDynamic === false;
       return true;
     });
   }, [data?.listings, search, filterDynamic]);
@@ -64,6 +66,11 @@ export default function ListingsPage() {
             {listingCount} Connected Listing{listingCount !== 1 ? "s" : ""}
           </span>
         </div>
+      </div>
+
+      <div className="grid gap-3 text-[11px] sm:grid-cols-2">
+        <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/5 px-4 py-3 text-slate-400"><strong className="text-emerald-400">Dynamic on</strong> means Wheelhouse automatic rate posting was enabled in the latest verified snapshot.</div>
+        <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 px-4 py-3 text-slate-400"><strong className="text-amber-300">Review needed</strong> means automatic posting was explicitly off. “Status unavailable” is shown separately when no verified snapshot exists.</div>
       </div>
 
       {/* Toolbar / Filters */}
@@ -135,7 +142,7 @@ export default function ListingsPage() {
               <tbody className="divide-y divide-white/5 text-xs">
                 {filtered.map((item) => {
                   const m = item.metrics;
-                  const isDynamic = Boolean(m?.dynamicPricingEnabled);
+                  const pricingState = m?.dynamicPricingEnabled === true ? "enabled" : m?.dynamicPricingEnabled === false ? "disabled" : "unknown";
                   const title = item.nickname || item.title || item.id;
                   const locationStr = item.location?.address || item.location?.city || item.channel || "Location unspecified";
 
@@ -168,19 +175,19 @@ export default function ListingsPage() {
                         </span>
                       </td>
                       <td className="py-4 px-4 text-right font-mono font-semibold text-foreground">
-                        {money(m?.revenue)}
+                        {money(m?.revenue, item.currency)}
                       </td>
                       <td className="py-4 px-4 text-right font-mono text-slate-300">
                         {m?.occupancy != null ? pct(m.occupancy) : "—"}
                       </td>
                       <td className="py-4 px-4 text-right font-mono text-slate-300">
-                        {money(m?.adr)}
+                        {money(m?.adr, item.currency)}
                       </td>
                       <td className="py-4 px-4 text-right font-mono text-slate-300">
-                        {money(m?.revpar)}
+                        {money(m?.revpar, item.currency)}
                       </td>
                       <td className="py-4 px-4 text-center">
-                        <StatusBadge variant={isDynamic ? "healthy" : "warning"} label={isDynamic ? "DYNAMIC ON" : "REVIEW"} />
+                        <StatusBadge variant={pricingState === "enabled" ? "healthy" : pricingState === "disabled" ? "warning" : "pending"} label={pricingState === "enabled" ? "DYNAMIC ON" : pricingState === "disabled" ? "REVIEW NEEDED" : "STATUS UNAVAILABLE"} />
                       </td>
                       <td className="py-4 px-4 text-right">
                         <Link

@@ -25,6 +25,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
   Area,
@@ -43,6 +44,7 @@ import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { SkeletonMetricCard, SkeletonPriorityRow } from "@/components/ui/Skeleton";
 import type { Incident, Priority } from "@/types/api";
 import { WorkItemWorkspace } from "@/components/dashboard/WorkItemWorkspace";
+import { ViewportPortal } from "@/components/ui/ViewportPortal";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
@@ -155,7 +157,7 @@ function IncidentDrawer({
   void incidentId;
 
   return (
-    <AnimatePresence>
+    <ViewportPortal lockScroll={open}><AnimatePresence>
       {open && (
         <>
           <motion.div
@@ -370,7 +372,7 @@ function IncidentDrawer({
           </motion.aside>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence></ViewportPortal>
   );
 }
 
@@ -620,9 +622,12 @@ export default function WarRoomPage() {
                   rank={i + 1}
                   onInvestigate={() => {
                     if (p.kind === "opportunity" || p.type === "opportunity") { setWorkItem({ kind: "opportunity", id: p.id }); return; }
-                    const matched = incidentData?.find((inc) => inc.id === p.id || inc.listingId === p.id);
-                    if (matched) setWorkItem({ kind: "incident", id: matched.id });
-                    else if (data.incident) openIncident(data.incident);
+                    if (p.kind === "incident" || p.type === "incident") {
+                      const matched = incidentData?.find((incident) => incident.id === p.id);
+                      setWorkItem({ kind: "incident", id: matched?.id || p.id });
+                      return;
+                    }
+                    window.location.href = `/dashboard/market#signal-${encodeURIComponent(p.id)}`;
                   }}
                 />
               ))
@@ -679,9 +684,9 @@ export default function WarRoomPage() {
                 <h3 className="font-display text-[14px] font-bold text-foreground">Market signals</h3>
                 <p className="mt-0.5 text-[10px] text-slate-500">Events and weather affecting your portfolio locations</p>
               </div>
-              <a href="/dashboard/market" className="text-[10px] font-semibold text-accent hover:text-accent/80">
+              <Link href="/dashboard/market" className="text-[10px] font-semibold text-accent hover:text-accent/80">
                 View all signals →
-              </a>
+              </Link>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {data.signals.slice(0, 4).map((signal) => (
@@ -741,7 +746,7 @@ export default function WarRoomPage() {
           canWrite={data?.capabilities?.wheelhouse?.writeActions === true}
         />
       )}
-      {workItem && <WorkItemWorkspace kind={workItem.kind} id={workItem.id} onClose={() => setWorkItem(null)} />}
+      {workItem && <WorkItemWorkspace key={`${workItem.kind}:${workItem.id}`} kind={workItem.kind} id={workItem.id} onClose={() => setWorkItem(null)} />}
     </>
   );
 }

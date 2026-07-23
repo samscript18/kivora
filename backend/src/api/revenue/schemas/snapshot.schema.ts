@@ -8,6 +8,7 @@ export class Snapshot {
   @Prop() channel: string;
   @Prop() health: number;
   @Prop() occupancy: number;
+  @Prop() forwardOccupancy?: number;
   @Prop() adr: number;
   @Prop() revenue: number;
   @Prop() revpar: number;

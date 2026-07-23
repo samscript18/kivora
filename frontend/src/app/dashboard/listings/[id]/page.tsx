@@ -5,6 +5,18 @@ import { getCapabilities, getListingWorkspace, getPortfolio, getStrategies, appl
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   Building2,
   ArrowLeft,
   ShieldCheck,
@@ -24,12 +36,18 @@ import { toast } from "sonner";
 import type { Listing } from "@/types/api";
 import {WorkItemWorkspace}from"@/components/dashboard/WorkItemWorkspace";
 
-const money = (value: number | undefined) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(value ?? 0);
+const money = (value: number | undefined | null, currency = "USD") => {
+  if (value == null || !Number.isFinite(Number(value))) return "—";
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(Number(value));
+  } catch {
+    return `${currency} ${Number(value).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  }
+};
 
 const pct = (value: number | undefined) => `${((value ?? 0) * 100).toFixed(1)}%`;
 
@@ -56,15 +74,15 @@ export default function ListingDetailPage() {
     queryFn: getCapabilities,
     staleTime: 60_000,
   });
-  const workspaceQuery=useQuery({queryKey:["listing-workspace",listingId],queryFn:()=>getListingWorkspace(listingId),enabled:Boolean(listingId)});
+  const workspaceQuery=useQuery({queryKey:QUERY_KEYS.listingWorkspace(listingId),queryFn:()=>getListingWorkspace(listingId),enabled:Boolean(listingId),staleTime:60_000});
   const syncFresh=workspaceQuery.data?.capabilities?.lastSynchronizedAt&&renderedAt-new Date(workspaceQuery.data.capabilities.lastSynchronizedAt).getTime()<6*60*60_000;
-  const canWrite = capabilitiesQuery.data?.wheelhouse.writeActions === true&&workspaceQuery.data?.capabilities?.writeActions===true&&workspaceQuery.data?.capabilities?.canApprove===true&&workspaceQuery.data?.capabilities?.listingActive===true&&Boolean(syncFresh);
+  const canWrite = capabilitiesQuery.data?.wheelhouse.writeActions === true&&capabilitiesQuery.data?.permissions?.canManageRevenue===true&&workspaceQuery.data?.capabilities?.writeActions===true&&workspaceQuery.data?.capabilities?.canApprove===true&&workspaceQuery.data?.capabilities?.listingActive===true&&Boolean(syncFresh);
 
   // Load strategies for simulator tab
   const strategiesQuery = useQuery({
     queryKey: QUERY_KEYS.strategies(listingId),
     queryFn: () => getStrategies(listingId),
-    enabled: Boolean(listingId),
+    enabled: Boolean(listingId) && activeTab === "simulator" && capabilitiesQuery.data?.permissions?.canAnalyze === true,
   });
 
   const applyMutation = useMutation({
@@ -121,8 +139,23 @@ export default function ListingDetailPage() {
   }
 
   const m = listing.metrics;
-  const isDynamic = Boolean(m?.dynamicPricingEnabled);
+  const workspace = workspaceQuery.data;
+  const currency = workspace?.listing.currency || workspace?.listing.portfolio?.currency || listing.currency || "USD";
+  const pricingState = m?.dynamicPricingEnabled === true ? "enabled" : m?.dynamicPricingEnabled === false ? "disabled" : "unknown";
+  const isDynamic = pricingState === "enabled";
   const title = listing.nickname || listing.title || listing.id;
+  const monthlyKpis = workspace?.performance.monthly?.data || [];
+  const neighborhoodPricing = workspace?.pricing.neighborhood?.data || [];
+  const neighborhoodByDate = new Map(neighborhoodPricing.map((row) => [row.stay_date, row]));
+  const priceComparison = (workspace?.pricing.recommendations?.data || []).slice(0, 60).map((row: any) => ({
+    date: row.stay_date,
+    listing: Number(row.price),
+    market: neighborhoodByDate.get(row.stay_date)?.median_price,
+    marketLow: neighborhoodByDate.get(row.stay_date)?.low_price,
+    marketHigh: neighborhoodByDate.get(row.stay_date)?.high_price,
+    minStay: row.min_stay,
+    custom: Boolean(row.custom_type),
+  }));
 
   return (
     <div className="dashboard-page space-y-6">
@@ -143,7 +176,7 @@ export default function ListingDetailPage() {
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge variant={isDynamic ? "healthy" : "warning"} label={isDynamic ? "DYNAMIC ON" : "REVIEW NEEDED"} />
+                <StatusBadge variant={pricingState === "enabled" ? "healthy" : pricingState === "disabled" ? "warning" : "pending"} label={pricingState === "enabled" ? "DYNAMIC ON" : pricingState === "disabled" ? "REVIEW NEEDED" : "STATUS UNAVAILABLE"} />
                 <SourceBadge source="wheelhouse" />
                 <span className="text-[10px] font-mono text-slate-500">ID: {listing.id}</span>
               </div>
@@ -179,7 +212,7 @@ export default function ListingDetailPage() {
         />
         <MetricCard
           label="30-Day Revenue"
-          value={money(m?.revenue)}
+          value={money(m?.revenue, currency)}
           detail="Actual booked revenue"
           icon={TrendingUp}
           tone="neutral"
@@ -193,13 +226,35 @@ export default function ListingDetailPage() {
         />
         <MetricCard
           label="ADR / RevPAR"
-          value={`${money(m?.adr)}`}
-          detail={`RevPAR: ${money(m?.revpar)}`}
+          value={`${money(m?.adr, currency)}`}
+          detail={`RevPAR: ${money(m?.revpar, currency)}`}
           icon={Sparkles}
           tone="neutral"
         />
       </div>
       {workspaceQuery.data&&<section className="card rounded-2xl p-5"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Info label="Portfolio" value={workspaceQuery.data.listing.portfolio?.name||"Unassigned"}/><Info label="Connection" value={`${workspaceQuery.data.listing.connection?.displayName||"Unknown"} · ${workspaceQuery.data.listing.connection?.status||"unknown"}`}/><Info label="Last synchronized" value={workspaceQuery.data.listing.lastSynchronizedAt?new Date(workspaceQuery.data.listing.lastSynchronizedAt).toLocaleString():"Not recorded"}/><Info label="Property profiles" value={(workspaceQuery.data.listing.propertyProfiles||[]).join(", ")||"Not configured"}/></div></section>}
+
+      {workspace?.liveData && (
+        <section className="card rounded-2xl p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-xs font-bold text-foreground">Live data coverage</h3>
+              <p className="mt-1 text-[10px] text-slate-500">
+                {workspace.liveData.available.length} Wheelhouse datasets loaded · refreshed {new Date(workspace.liveData.fetchedAt).toLocaleString()}
+              </p>
+            </div>
+            <StatusBadge
+              variant={workspace.liveData.unavailable.length ? "warning" : "healthy"}
+              label={workspace.liveData.unavailable.length ? `${workspace.liveData.unavailable.length} OPTIONAL FEEDS UNAVAILABLE` : "ALL FEEDS AVAILABLE"}
+            />
+          </div>
+          {workspace.liveData.unavailable.length > 0 && (
+            <p className="mt-3 text-[10px] leading-4 text-slate-500">
+              Unavailable for this listing or plan: {workspace.liveData.unavailable.map(humanize).join(", ")}. Available datasets remain live and usable.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* Navigation Tabs */}
       <div className="mobile-scroll-row flex gap-6 border-b border-border text-xs font-semibold">
@@ -252,7 +307,7 @@ export default function ListingDetailPage() {
                 <StatusBadge variant={isDynamic ? "healthy" : "warning"} label={isDynamic ? "LIVE" : "REVIEW"} />
               </div>
               <p className="text-xs leading-relaxed text-slate-300">
-                Dynamic pricing is {isDynamic ? "active" : "inactive"}. The latest verified snapshot reports {m?.occupancy != null ? `${pct(m.occupancy)} occupancy` : "no occupancy value"}, {m?.adr != null ? `${money(m.adr)} ADR` : "no ADR value"}, and {m?.revpar != null ? `${money(m.revpar)} RevPAR` : "no RevPAR value"}.
+                Dynamic pricing is {isDynamic ? "active" : "inactive"}. The latest verified snapshot reports {m?.occupancy != null ? `${pct(m.occupancy)} occupancy` : "no occupancy value"}, {m?.adr != null ? `${money(m.adr, currency)} ADR` : "no ADR value"}, and {m?.revpar != null ? `${money(m.revpar, currency)} RevPAR` : "no RevPAR value"}.
               </p>
             </div>
 
@@ -285,7 +340,101 @@ export default function ListingDetailPage() {
           </section>
         </div>
       )}
-      {activeTab==="operations"&&<div className="space-y-5">{workspaceQuery.isLoading?<div className="card rounded-2xl p-6 text-xs text-slate-500">Loading organization-scoped intelligence…</div>:workspaceQuery.error?<ErrorState error={workspaceQuery.error} onRetry={()=>workspaceQuery.refetch()}/>:workspaceQuery.data&&<><section className="grid gap-4 md:grid-cols-2"><OperationalList title="Active incidents" empty="No active incidents for this listing." items={(workspaceQuery.data.intelligence.incidents||[]).filter((x:any)=>x.status==="open")} open={(item:any)=>setSelectedWork({kind:"incident",id:item.externalId||item.id})}/><OperationalList title="Active opportunities" empty="No active opportunities currently meet deterministic evidence thresholds." items={(workspaceQuery.data.intelligence.opportunities||[]).filter((x:any)=>["open","under_review","approved"].includes(x.status))} open={(item:any)=>setSelectedWork({kind:"opportunity",id:item.id})}/></section><section className="card rounded-2xl p-5"><h3 className="text-sm font-bold">Live pricing state</h3><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Info label="Base price" value={money(workspaceQuery.data.pricing.preferences?.base_price)}/><Info label="Automatic pricing" value={workspaceQuery.data.pricing.preferences?.dynamic_pricing_enabled===false?"Disabled":"Enabled"}/><Info label="Rate posting" value={workspaceQuery.data.pricing.preferences?.automatic_rate_posting_enabled===false?"Disabled":"Enabled"}/><Info label="Minimum stay" value={workspaceQuery.data.pricing.preferences?.minimum_stay||workspaceQuery.data.pricing.preferences?.min_stay||"Unavailable"}/></div><RecordList title="Recent pricing changes" empty="No recent Wheelhouse pricing changes were returned." items={workspaceQuery.data.pricing.recentChanges?.data||workspaceQuery.data.pricing.recentChanges||[]}/></section><section className="grid gap-4 lg:grid-cols-2"><StatusList title="Revenue actions and verification" empty="No revenue action has been executed for this listing." items={workspaceQuery.data.operations.actions||[]}/><StatusList title="Measured outcomes" empty="No completed measurement window is available yet." items={workspaceQuery.data.operations.outcomes||[]}/><StatusList title="Event and weather signals" empty="No active market signal affects this listing." items={workspaceQuery.data.intelligence.signals||[]}/><StatusList title="Activity and reports" empty="No listing activity has been recorded." items={[...(workspaceQuery.data.operations.activity||[]),...(workspaceQuery.data.operations.reports||[])]}/></section></>}</div>}
+      {activeTab === "audit" && workspace && (
+        <section className="grid gap-4 lg:grid-cols-2">
+          <div className="card rounded-2xl p-5">
+            <h3 className="text-sm font-bold">Rolling performance windows</h3>
+            <p className="mt-1 text-[10px] text-slate-500">Forward-looking Wheelhouse KPIs, not extrapolated values.</p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {[7, 30, 60, 90].map((days) => (
+                <div key={days} className="rounded-xl border border-border bg-elevated p-3">
+                  <div className="text-[9px] font-mono uppercase text-slate-500">Next {days} days</div>
+                  <div className="mt-2 text-sm font-bold">{metricPercent(workspace.performance.rolling, "occupancy", `0_${days}`)}</div>
+                  <div className="mt-1 text-[10px] text-slate-500">{money(metricValue(workspace.performance.rolling, "revenue", `0_${days}`), currency)} revenue</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="card rounded-2xl p-5">
+            <h3 className="text-sm font-bold">Wheelhouse system flags</h3>
+            <p className="mt-1 text-[10px] text-slate-500">Read-only provider signals attached to this listing.</p>
+            {workspace.listing.flags?.length ? (
+              <div className="mt-4 space-y-2">
+                {workspace.listing.flags.map((flag) => (
+                  <div key={flag.name} className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                    <div className="text-xs font-semibold text-amber-300">{humanize(flag.name)}</div>
+                    {flag.description && <p className="mt-1 text-[10px] leading-4 text-slate-400">{flag.description}</p>}
+                  </div>
+                ))}
+              </div>
+            ) : <p className="mt-4 text-xs text-slate-500">No active system flags were returned.</p>}
+          </div>
+        </section>
+      )}
+
+      {activeTab==="operations"&&<div className="space-y-5">{workspaceQuery.isLoading?<div className="card rounded-2xl p-6 text-xs text-slate-500">Loading organization-scoped intelligence…</div>:workspaceQuery.error?<ErrorState error={workspaceQuery.error} onRetry={()=>workspaceQuery.refetch()}/>:workspaceQuery.data&&<><section className="grid gap-4 md:grid-cols-2"><OperationalList title="Active incidents" empty="No active incidents for this listing." items={(workspaceQuery.data.intelligence.incidents||[]).filter((x:any)=>x.status==="open")} open={(item:any)=>setSelectedWork({kind:"incident",id:item.externalId||item.id})}/><OperationalList title="Active opportunities" empty="No active opportunities currently meet deterministic evidence thresholds." items={(workspaceQuery.data.intelligence.opportunities||[]).filter((x:any)=>["open","under_review","approved"].includes(x.status))} open={(item:any)=>setSelectedWork({kind:"opportunity",id:item.id})}/></section><section className="card rounded-2xl p-5"><h3 className="text-sm font-bold">Live pricing state</h3><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Info label="Base price" value={money(workspaceQuery.data.pricing.preferences?.base_price, currency)}/><Info label="Automatic pricing" value={workspaceQuery.data.pricing.preferences?.dynamic_pricing_enabled===false?"Disabled":"Enabled"}/><Info label="Rate posting" value={workspaceQuery.data.pricing.preferences?.automatic_rate_posting_enabled===false?"Disabled":"Enabled"}/><Info label="Minimum stay" value={workspaceQuery.data.pricing.preferences?.minimum_stay||workspaceQuery.data.pricing.preferences?.min_stay||"Unavailable"}/></div><RecordList title="Recent pricing changes" empty="No recent Wheelhouse pricing changes were returned." items={workspaceQuery.data.pricing.recentChanges?.data||workspaceQuery.data.pricing.recentChanges||[]}/></section><section className="grid gap-4 lg:grid-cols-2"><StatusList title="Revenue actions and verification" empty="No revenue action has been executed for this listing." items={workspaceQuery.data.operations.actions||[]}/><StatusList title="Measured outcomes" empty="No completed measurement window is available yet." items={workspaceQuery.data.operations.outcomes||[]}/><StatusList title="Event and weather signals" empty="No active market signal affects this listing." items={workspaceQuery.data.intelligence.signals||[]}/><StatusList title="Activity and reports" empty="No listing activity has been recorded." items={[...(workspaceQuery.data.operations.activity||[]),...(workspaceQuery.data.operations.reports||[])]}/></section></>}</div>}
+
+      {activeTab === "operations" && workspace && (
+        <section className="grid gap-4 lg:grid-cols-2">
+          <div className="card rounded-2xl p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold">Upcoming reservations</h3>
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Stay dates {workspace.liveData?.reservationWindow.startDate} through {workspace.liveData?.reservationWindow.endDate}
+                </p>
+              </div>
+              <span className="text-xs font-bold text-accent">{workspace.operations.reservations.length}</span>
+            </div>
+            {workspace.operations.reservations.length ? (
+              <div className="mt-4 max-h-80 space-y-2 overflow-auto">
+                {workspace.operations.reservations.slice(0, 50).map((reservation) => (
+                  <div key={reservation.id} className="rounded-xl border border-border bg-elevated p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-semibold">{formatDateRange(reservation.start_date, reservation.end_date)}</div>
+                        <div className="mt-1 text-[10px] text-slate-500">
+                          {reservation.source_name || "Connected channel"} · {reservation.num_guests ?? "—"} guests
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs font-bold">{money(reservation.total_price, reservation.currency || currency)}</div>
+                        <div className="mt-1 text-[9px] uppercase text-slate-500">{reservation.status || "booked"}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="mt-4 text-xs text-slate-500">No upcoming reservations were returned for this window.</p>}
+          </div>
+          <div className="card rounded-2xl p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold">Forward pricing calendar</h3>
+                <p className="mt-1 text-[10px] text-slate-500">Recommended rates, minimum stay, and custom overrides.</p>
+              </div>
+              {workspace.pricing.pricingTier && <StatusBadge variant="neutral" label={`${workspace.pricing.pricingTier.name} · ${workspace.pricing.pricingTier.horizon}D`} />}
+            </div>
+            {priceComparison.length ? (
+              <div className="mt-4 max-h-80 overflow-auto">
+                <table className="w-full text-left text-[10px]">
+                  <thead className="sticky top-0 bg-card text-slate-500"><tr><th className="py-2">Stay date</th><th>Rate</th><th>Market</th><th>Min stay</th></tr></thead>
+                  <tbody>
+                    {priceComparison.slice(0, 45).map((row: any) => (
+                      <tr key={row.date} className="border-t border-border">
+                        <td className="py-2.5 text-slate-300">{formatShortDate(row.date)}</td>
+                        <td className="font-semibold">{money(row.listing, currency)}{row.custom ? " *" : ""}</td>
+                        <td className="text-slate-400">{money(row.market, currency)}</td>
+                        <td className="text-slate-400">{row.minStay ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="mt-4 text-xs text-slate-500">No forward price recommendations were returned.</p>}
+          </div>
+        </section>
+      )}
 
       {/* Tab 2: Simulator */}
       {activeTab === "simulator" && (
@@ -298,7 +447,9 @@ export default function ListingDetailPage() {
               Evaluate conservative, balanced, and aggressive scenarios before approving updates.
             </p>
 
-            {strategiesQuery.isLoading ? (
+            {capabilitiesQuery.data?.permissions?.canAnalyze === false ? (
+              <div className="mt-6 rounded-xl border border-amber-500/15 p-4 text-xs text-amber-200">Analyst permission is required to run live strategy previews.</div>
+            ) : strategiesQuery.isLoading ? (
               <div className="grid gap-4 md:grid-cols-3 mt-6">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="skeleton h-48 rounded-xl" />
@@ -331,10 +482,10 @@ export default function ListingDetailPage() {
                         <div className="mt-4 space-y-2">
                           <div className="text-[10px] uppercase font-mono text-slate-500">Projected 30d Revenue</div>
                           <div className="font-display text-xl font-bold text-foreground">
-                            {money(strat.projectedRevenue)}
+                            {money(strat.projectedRevenue, currency)}
                           </div>
                           <div className={`text-xs font-semibold ${strat.estimatedUplift >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                            {strat.estimatedUplift >= 0 ? "+" : ""}{money(strat.estimatedUplift)} estimated uplift
+                            {strat.estimatedUplift >= 0 ? "+" : ""}{money(strat.estimatedUplift, currency)} estimated uplift
                           </div>
                         </div>
                       ) : (
@@ -381,7 +532,7 @@ export default function ListingDetailPage() {
           <div className="grid gap-4 sm:grid-cols-3 pt-2">
             <div className="rounded-xl border border-border bg-elevated p-4">
               <div className="text-[10px] uppercase font-mono text-slate-500">Listing ADR</div>
-              <div className="mt-2 text-xl font-bold text-foreground">{money(m?.adr)}</div>
+              <div className="mt-2 text-xl font-bold text-foreground">{money(m?.adr, currency)}</div>
               <div className="mt-1 text-xs text-slate-400">Latest verified listing KPI</div>
             </div>
             <div className="rounded-xl border border-border bg-elevated p-4">
@@ -391,10 +542,73 @@ export default function ListingDetailPage() {
             </div>
             <div className="rounded-xl border border-border bg-elevated p-4">
               <div className="text-[10px] uppercase font-mono text-slate-500">Listing RevPAR</div>
-              <div className="mt-2 text-xl font-bold text-foreground">{money(m?.revpar)}</div>
+              <div className="mt-2 text-xl font-bold text-foreground">{money(m?.revpar, currency)}</div>
               <div className="mt-1 text-xs text-slate-400">Latest verified listing KPI</div>
             </div>
           </div>
+
+          <div className="grid gap-4 pt-2 xl:grid-cols-2">
+            <div className="rounded-xl border border-border bg-elevated p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-bold">60-day price position</h4>
+                  <p className="mt-1 text-[10px] text-slate-500">Listing recommendation versus neighborhood median.</p>
+                </div>
+                <span className="text-[9px] font-mono uppercase text-slate-500">{currency}</span>
+              </div>
+              {priceComparison.some((row: any) => row.market != null) ? (
+                <div className="mt-4 h-64 min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={priceComparison} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                      <CartesianGrid stroke="rgba(148,163,184,.10)" vertical={false} />
+                      <XAxis dataKey="date" tickFormatter={formatShortDate} tick={{ fontSize: 9, fill: "#64748b" }} minTickGap={28} />
+                      <YAxis tick={{ fontSize: 9, fill: "#64748b" }} />
+                      <Tooltip contentStyle={{ background: "#121a17", border: "1px solid rgba(148,163,184,.18)", borderRadius: 12, fontSize: 11 }} formatter={(value) => money(Number(value), currency)} labelFormatter={(label) => formatShortDate(String(label ?? ""))} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Line type="monotone" dataKey="listing" name="Listing rate" stroke="#d8f45b" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="market" name="Neighborhood median" stroke="#60a5fa" strokeWidth={2} dot={false} connectNulls />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : <p className="mt-4 text-xs text-slate-500">Neighborhood pricing is not available for this listing or market.</p>}
+            </div>
+
+            <div className="rounded-xl border border-border bg-elevated p-4">
+              <div>
+                <h4 className="text-xs font-bold">Monthly revenue history</h4>
+                <p className="mt-1 text-[10px] text-slate-500">Up to 15 months of listing and comp-set performance.</p>
+              </div>
+              {monthlyKpis.length ? (
+                <div className="mt-4 h-64 min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthlyKpis} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                      <CartesianGrid stroke="rgba(148,163,184,.10)" vertical={false} />
+                      <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fontSize: 9, fill: "#64748b" }} minTickGap={18} />
+                      <YAxis tick={{ fontSize: 9, fill: "#64748b" }} />
+                      <Tooltip contentStyle={{ background: "#121a17", border: "1px solid rgba(148,163,184,.18)", borderRadius: 12, fontSize: 11 }} formatter={(value) => money(Number(value), workspace?.performance.monthly?.currency || currency)} labelFormatter={(label) => formatMonth(String(label ?? ""))} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Bar dataKey="revenue" name="Listing" fill="#d8f45b" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="comp_set_revenue" name="Comp set" fill="#60a5fa" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : <p className="mt-4 text-xs text-slate-500">Monthly KPI history is not available for this listing.</p>}
+            </div>
+          </div>
+
+          {workspace?.pricing.monthlySeasonality?.REC && (
+            <div className="rounded-xl border border-border bg-elevated p-4">
+              <h4 className="text-xs font-bold">Recommended seasonality curve</h4>
+              <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6 xl:grid-cols-12">
+                {Object.entries(workspace.pricing.monthlySeasonality.REC).map(([month, factor]) => (
+                  <div key={month} className="rounded-lg border border-border p-2 text-center">
+                    <div className="text-[9px] uppercase text-slate-500">{monthName(Number(month))}</div>
+                    <div className={`mt-1 text-xs font-bold ${factor >= 1 ? "text-emerald-400" : "text-amber-300"}`}>{Number(factor).toFixed(2)}×</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -415,7 +629,7 @@ export default function ListingDetailPage() {
           </div>
         }
       />
-      {selectedWork&&<WorkItemWorkspace kind={selectedWork.kind} id={selectedWork.id} onClose={()=>setSelectedWork(null)}/>}</div>
+      {selectedWork&&<WorkItemWorkspace key={`${selectedWork.kind}:${selectedWork.id}`} kind={selectedWork.kind} id={selectedWork.id} onClose={()=>setSelectedWork(null)}/>}</div>
   );
 }
 
@@ -424,3 +638,47 @@ function OperationalList({title,empty,items,open}:{title:string;empty:string;ite
 function StatusList({title,empty,items}:{title:string;empty:string;items:any[]}){return <section className="card rounded-2xl p-5"><h3 className="text-sm font-bold">{title}</h3>{items.length?<div className="mt-3 max-h-80 space-y-2 overflow-auto">{items.slice(0,30).map((item,index)=><div key={item.id||item._id||index} className="rounded-xl border border-border bg-elevated p-3"><div className="flex items-start gap-2"><span className="min-w-0 flex-1 text-xs font-semibold">{item.title||item.actionType||item.type||item.action||"Recorded item"}</span><span className="text-[9px] font-bold uppercase text-slate-500">{item.status||item.deliveryStatus||"recorded"}</span></div><p className="mt-1 text-[10px] text-slate-500">{statusDetail(item)}</p>{(item.createdAt||item.calculatedAt)&&<p className="mt-1 text-[9px] text-slate-600">{new Date(item.createdAt||item.calculatedAt).toLocaleString()}</p>}</div>)}</div>:<p className="mt-3 text-xs text-slate-500">{empty}</p>}</section>}
 function statusDetail(item:any){if(item.message)return item.message;if(item.errorDetails?.reason)return item.errorDetails.reason;if(item.verificationResult?.matched===true)return"Wheelhouse state verified";if(item.verificationResult?.matched===false)return"Verification did not match";return"Stored in the organization activity history";}
 function RecordList({title,empty,items}:{title:string;empty:string;items:any}){const rows=Array.isArray(items)?items:[];return <div className="mt-5"><h4 className="text-xs font-bold">{title}</h4>{rows.length?<div className="mt-2 grid gap-2 sm:grid-cols-2">{rows.slice(0,12).map((item:any,index:number)=><div key={item.id||item.stay_date||index} className="rounded-lg border border-border bg-elevated p-3 text-[10px] text-slate-400">{item.stay_date||item.date||item.created_at||"Pricing record"} · {item.price!=null?money(item.price):item.action||item.change||"Updated"}</div>)}</div>:<p className="mt-2 text-xs text-slate-500">{empty}</p>}</div>}
+
+function metricValue(
+  metrics: Record<string, Record<string, number> | number | null> | null | undefined,
+  key: string,
+  period: string,
+) {
+  const metric = metrics?.[key];
+  if (!metric || typeof metric !== "object") return undefined;
+  const value = metric[period];
+  return typeof value === "number" ? value : undefined;
+}
+
+function metricPercent(
+  metrics: Record<string, Record<string, number> | number | null> | null | undefined,
+  key: string,
+  period: string,
+) {
+  const value = metricValue(metrics, key, period);
+  return value == null ? "—" : pct(value);
+}
+
+function humanize(value: string) {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatShortDate(value: string) {
+  if (!value) return "—";
+  const parsed = new Date(`${value.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function formatMonth(value: string) {
+  if (!value) return "—";
+  const parsed = new Date(`${value.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+}
+
+function formatDateRange(start: string, end: string) {
+  return `${formatShortDate(start)} – ${formatShortDate(end)}`;
+}
+
+function monthName(month: number) {
+  return new Date(Date.UTC(2026, Math.max(0, month - 1), 1)).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+}
