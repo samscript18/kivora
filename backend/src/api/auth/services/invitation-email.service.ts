@@ -20,8 +20,12 @@ export class InvitationEmailService {
     this.frontendUrl = (config.get<string>("FRONTEND_URL") || "http://localhost:3000").split(",")[0].trim().replace(/\/$/, "");
   }
 
+  invitationUrl(token: string) {
+    return `${this.frontendUrl}/invite?token=${encodeURIComponent(token)}`;
+  }
+
   async sendInvitation(input: InvitationEmail) {
-    const invitationUrl = `${this.frontendUrl}/invite?token=${encodeURIComponent(input.token)}`;
+    const invitationUrl = this.invitationUrl(input.token);
     return this.mail.sendMail({
       to: input.email,
       subject: `${input.inviterName} invited you to ${input.organizationName} on Kivora`,

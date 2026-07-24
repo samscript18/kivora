@@ -146,6 +146,8 @@ docker compose --env-file frontend/.env.local up --build
 
 `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_PRIVY_APP_ID` are the only browser-exposed values. Do not expose server credentials with a `NEXT_PUBLIC_` prefix.
 
+If SMTP delivery is unavailable (for example, on a constrained deployment), creating a teammate invitation still succeeds. Team owners and administrators are shown the secure single-use invitation URL once in Settings and can copy it to share through a trusted channel. Kivora never stores the plaintext token, so create a replacement invitation if that URL is lost.
+
 Wheelhouse cache entries are namespaced by a one-way credential fingerprint and exact request path, so one organization never receives another organization’s provider response. Redis is authoritative when configured; the API falls back to a short-lived in-process cache only if Redis is temporarily unavailable. Cache statistics and the selected cache backend are included in the authenticated capabilities response.
 
 ## First organization workflow

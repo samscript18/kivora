@@ -134,14 +134,18 @@ export class AuthService {
     const organization = await this.organizations.findById(organizationId).select("name").lean();
     const token = randomBytes(32).toString("base64url");
     const invitation = await this.invitations.create({ organizationId, email, role: input.role, tokenHash: this.hash(token), createdBy: this.objectId(actor.sub, "User"), expiresAt: new Date(Date.now() + 7 * 86_400_000) });
+    const invitationUrl = this.invitationEmail.invitationUrl(token);
     try {
       const delivery = await this.invitationEmail.sendInvitation({ invitationId: String(invitation._id), email, organizationName: organization?.name || "your Kivora workspace", inviterName: actor.name || "A Kivora administrator", role: input.role, token, expiresAt: invitation.expiresAt });
       await this.invitations.updateOne({ _id: invitation._id }, { $set: { sentAt: new Date(), deliveryProvider: delivery.provider, providerMessageId: delivery.messageId }, $unset: { deliveryError: 1 } });
-      return { id: String(invitation._id), email, role: input.role, status: "sent", expiresAt: invitation.expiresAt };
+      return { id: String(invitation._id), email, role: input.role, status: "sent", emailDelivery: "sent", invitationUrl, expiresAt: invitation.expiresAt };
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0, 500) : "Invitation email delivery failed";
-      await this.invitations.updateOne({ _id: invitation._id }, { $set: { status: "revoked", revokedAt: new Date(), deliveryProvider: "smtp", deliveryError: message } });
-      throw error;
+      // A delivery outage must not discard a valid invitation. The plaintext
+      // link is returned once to the authorized owner so it can be shared by a
+      // trusted channel; only its hash is persisted.
+      await this.invitations.updateOne({ _id: invitation._id }, { $set: { deliveryProvider: "smtp", deliveryError: message } });
+      return { id: String(invitation._id), email, role: input.role, status: "sent", emailDelivery: "failed", invitationUrl, expiresAt: invitation.expiresAt };
     }
   }
 
