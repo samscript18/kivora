@@ -2,6 +2,7 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { Providers } from "@/components/Providers";
 import { AppShell } from "@/components/shell/AppShell";
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -57,8 +58,13 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) {
-    return <NoPrivy>{children}</NoPrivy>;
-  }
-  return <AuthGate>{children}</AuthGate>;
+  return (
+    <Providers>
+      {!process.env.NEXT_PUBLIC_PRIVY_APP_ID ? (
+        <NoPrivy>{children}</NoPrivy>
+      ) : (
+        <AuthGate>{children}</AuthGate>
+      )}
+    </Providers>
+  );
 }

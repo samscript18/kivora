@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "@fontsource-variable/jetbrains-mono";
 import "@fontsource-variable/plus-jakarta-sans";
-import { Providers } from "@/components/Providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="font-sans antialiased">
-        <Providers>{children}</Providers>
+        {children}
         <div className="noise-overlay" />
       </body>
     </html>

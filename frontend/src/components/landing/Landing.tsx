@@ -1,6 +1,5 @@
 "use client";
 
-import { usePrivy } from "@privy-io/react-auth";
 import {
   AnimatePresence,
   motion,
@@ -33,11 +32,8 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 
-const configured = Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID);
 const nav = [
   { label: "Platform", href: "#platform" },
   { label: "Intelligence", href: "#intelligence" },
@@ -51,48 +47,12 @@ const reveal = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease } },
 };
 
-function WorkspaceLaunch({ className = "" }: { className?: string }) {
-  const { ready, authenticated, login } = usePrivy();
-  const router = useRouter();
-  return (
-    <button
-      disabled={!ready}
-      onClick={() => (authenticated ? router.push("/dashboard") : login())}
-      className={className}
-    >
-      {authenticated ? "Open workspace" : "Enter Kivora"}
-      <ArrowRight size={15} />
-    </button>
-  );
-}
-
-function AuthenticatedLandingRedirect() {
-  const { ready, authenticated } = usePrivy();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (ready && authenticated) router.replace("/dashboard");
-  }, [ready, authenticated, router]);
-
-  return null;
-}
-
-function LandingRedirect() {
-  return configured ? <AuthenticatedLandingRedirect /> : null;
-}
-
 function Launch({ className = "" }: { className?: string }) {
-  if (!configured) {
-    return (
-      <button
-        onClick={() => toast.error("Workspace sign-in is not configured yet.")}
-        className={className}
-      >
-        Enter Kivora <ArrowRight size={15} />
-      </button>
-    );
-  }
-  return <WorkspaceLaunch className={className} />;
+  return (
+    <Link href="/dashboard" className={className}>
+      Enter Kivora <ArrowRight size={15} />
+    </Link>
+  );
 }
 
 function Navbar() {
@@ -1085,7 +1045,6 @@ function FinalCTA() {
 export function Landing() {
   return (
     <main className="landing-page">
-      <LandingRedirect />
       <Navbar />
       <Hero />
       <SignalRail />

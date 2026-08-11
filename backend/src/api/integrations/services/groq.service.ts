@@ -23,6 +23,7 @@ export class GroqService {
   private readonly openRouterKey?: string;
   private readonly openRouterModel: string;
   private readonly openRouterBase: string;
+  private readonly openRouterSiteUrl?: string;
 
   constructor(private readonly http: HttpService, config: ConfigService) {
     this.groqKey = config.get<string>("GROQ_API_KEY");
@@ -34,6 +35,7 @@ export class GroqService {
     this.openRouterKey = config.get<string>("OPENROUTER_API_KEY");
     this.openRouterModel = config.get<string>("OPENROUTER_MODEL", "mistralai/mistral-small-2603");
     this.openRouterBase = config.get<string>("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1");
+    this.openRouterSiteUrl = (config.get<string>("OPENROUTER_SITE_URL") || config.get<string>("FRONTEND_URL"))?.split(",")[0].trim().replace(/\/$/, "");
   }
 
   get configured() { return Boolean(this.groqKey || this.geminiKey || this.openRouterKey); }
@@ -101,10 +103,11 @@ export class GroqService {
   }
 
   private async openRouter(system: string, content: string, temperature: number): Promise<Completion> {
+    const attribution = this.openRouterSiteUrl ? { "HTTP-Referer": this.openRouterSiteUrl } : {};
     const response = await firstValueFrom(this.http.post<OpenAiResponse>(
       `${this.openRouterBase}/chat/completions`,
       { model: this.openRouterModel, temperature, messages: [{ role: "system", content: system }, { role: "user", content }] },
-      { headers: { Authorization: `Bearer ${this.openRouterKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://kivora.app", "X-Title": "Kivora" }, timeout: 30_000 },
+      { headers: { Authorization: `Bearer ${this.openRouterKey}`, "Content-Type": "application/json", ...attribution, "X-Title": "Kivora" }, timeout: 30_000 },
     ));
     return this.result(response.data.choices?.[0]?.message?.content, `openrouter:${this.openRouterModel}`);
   }

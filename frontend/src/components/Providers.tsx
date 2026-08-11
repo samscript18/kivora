@@ -54,7 +54,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
 			</QueryClientProvider>
 		);
 	return (
-		<PrivyProvider appId={appId} config={{ loginMethods: ["email", "google"], appearance: { theme: "dark", accentColor: "#FF1301", showWalletLoginFirst: false } }}>
+		<PrivyProvider
+			appId={appId}
+			config={{
+				loginMethods: ["email", "google"],
+				embeddedWallets: {
+					ethereum: { createOnLogin: "off" },
+					solana: { createOnLogin: "off" },
+				},
+				appearance: { theme: "dark", accentColor: "#FF1301", showWalletLoginFirst: false },
+			}}
+		>
 			<QueryClientProvider client={client}>
 				<AuthBridge>{children}</AuthBridge>
 				<Toaster theme="dark" position="bottom-right" richColors />

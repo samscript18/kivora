@@ -3,6 +3,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { Check, Link2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
+import { Providers } from "@/components/Providers";
 import { connectTelegram } from "@/lib/api";
 
 function ConnectFlow() {
@@ -87,16 +88,18 @@ function Missing() {
 }
 export default function ConnectPage() {
   return (
-    <main className="grid min-h-[100dvh] place-items-center bg-[#030303] p-3 sm:p-5">
-      <Suspense
-        fallback={
-          <div className="font-mono text-xs text-slate-500">
-            Loading secure link…
-          </div>
-        }
-      >
-        {process.env.NEXT_PUBLIC_PRIVY_APP_ID ? <ConnectFlow /> : <Missing />}
-      </Suspense>
-    </main>
+    <Providers>
+      <main className="grid min-h-[100dvh] place-items-center bg-[#030303] p-3 sm:p-5">
+        <Suspense
+          fallback={
+            <div className="font-mono text-xs text-slate-500">
+              Loading secure link…
+            </div>
+          }
+        >
+          {process.env.NEXT_PUBLIC_PRIVY_APP_ID ? <ConnectFlow /> : <Missing />}
+        </Suspense>
+      </main>
+    </Providers>
   );
 }
