@@ -34,6 +34,7 @@ export class MailService {
         from: this.config.get<string>("MAILER_FROM_EMAIL"),
         to: input.to,
         subject: input.subject,
+        ...(input.text ? { text: input.text } : {}),
         template: input.template,
         context: input.context,
       });
@@ -56,6 +57,7 @@ export class MailService {
           sender: { email: senderEmail, name: this.config.get<string>("BREVO_SENDER_NAME", "Kivora") },
           to: (Array.isArray(input.to) ? input.to : [input.to]).map((email) => ({ email })),
           subject: input.subject,
+          ...(input.text ? { textContent: input.text } : {}),
           htmlContent: this.render(input.template, input.context),
           ...(input.idempotencyKey ? { headers: { idempotencyKey: this.uuid(input.idempotencyKey) } } : {}),
         },

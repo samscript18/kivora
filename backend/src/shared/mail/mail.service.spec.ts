@@ -4,6 +4,7 @@ import { MailService } from "./mail.service";
 const input = {
   to: "manager@example.com",
   subject: "Join Northstar Rentals",
+  text: "Ada invited you to Northstar Rentals. Accept: https://kivora.test/invite?token=private-token",
   template: "team-invitation",
   idempotencyKey: "kivora-invitation-invite_123",
   context: {
@@ -37,6 +38,7 @@ describe("MailService", () => {
         sender: { email: "team@kivora.test", name: "Kivora Team" },
         to: [{ email: "manager@example.com" }],
         subject: "Join Northstar Rentals",
+        textContent: input.text,
         htmlContent: expect.stringContaining("https://kivora.test/invite?token&#x3D;private-token"),
         headers: { idempotencyKey: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/) },
       }),
@@ -56,7 +58,7 @@ describe("MailService", () => {
     const service = new MailService({ sendMail } as never, config as never, { post: jest.fn() } as never);
 
     await expect(service.sendMail(input)).resolves.toEqual({ provider: "smtp", messageId: "smtp-message-123" });
-    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: input.to, template: input.template }));
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: input.to, text: input.text, template: input.template }));
   });
 
   it("surfaces Brevo's API error without exposing the API key", async () => {
