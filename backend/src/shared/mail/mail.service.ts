@@ -2,7 +2,8 @@ import { Injectable, Logger, ServiceUnavailableException } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config";
 import { readFileSync } from "fs";
 import * as Handlebars from "handlebars";
-import nodemailer, { type Transporter } from "nodemailer";
+import * as nodemailer from "nodemailer";
+import type { Transporter } from "nodemailer";
 import { join } from "path";
 import { SendMail } from "./interfaces";
 

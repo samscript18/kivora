@@ -1,10 +1,7 @@
-import nodemailer from "nodemailer";
+import * as nodemailer from "nodemailer";
 import { MailService } from "./mail.service";
 
-jest.mock("nodemailer", () => ({
-  __esModule: true,
-  default: { createTransport: jest.fn() },
-}));
+jest.mock("nodemailer", () => ({ createTransport: jest.fn() }));
 
 const input = {
   to: "manager@example.com",
