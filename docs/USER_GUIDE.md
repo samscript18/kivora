@@ -88,6 +88,8 @@ The Settings page adapts to role:
 - Analysts can use underwriting and analysis workflows.
 - Viewers can read settings and manage personal notification preferences but cannot change shared operations.
 
+When an administrator invites a teammate, Kivora reports whether the invitation email was sent. If delivery fails, copy the one-time invitation URL shown immediately after creation and share it through a trusted channel. The URL cannot be recovered later because Kivora stores only a hash of its token; revoke the invitation and create a replacement if the link is lost. The recipient must sign in with the exact invited email address.
+
 ## Troubleshooting
 
 | Problem | What to do |
@@ -98,3 +100,4 @@ The Settings page adapts to role:
 | A scheduled action cancelled | Review recommendation/simulation expiry and the current live baseline; the safety check detected changed conditions. |
 | You cannot see an action button | Your role or the current connection capability does not authorize it. |
 | Data looks stale | Check the most recent scan and use the permitted refresh/scan control. If it persists, inspect connection health. |
+| A teammate did not receive an invitation | Check whether Settings reported email delivery as sent or failed. If failed, use the one-time link shown when the invitation was created and ask an operator to check SMTP configuration. If sent, check spam/quarantine and confirm the invited address before creating a replacement. |

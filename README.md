@@ -61,8 +61,9 @@ The backend enforces these roles. UI controls are also hidden or disabled where 
 - A Privy application for browser authentication.
 - A 32-byte hexadecimal encryption key for organization credentials.
 - At least one Wheelhouse API credential connected through Kivora for a ready portfolio.
+- An SMTP account and verified sender for production teammate invitations. The environment example is prefilled for Brevo's SMTP relay.
 
-Optional integrations are Groq, Telegram, SMTP invitation delivery, Ticketmaster, and OpenWeather. They are feature-specific; Kivora remains explicit when one is unavailable.
+Optional integrations are Telegram, Ticketmaster, and OpenWeather. They are feature-specific; Kivora remains explicit when one is unavailable. At least one supported AI provider and SMTP invitation delivery are required by production configuration validation.
 
 ## Local setup
 
@@ -115,7 +116,9 @@ docker compose --env-file frontend/.env.local up --build
 | `PRIVY_APP_ID` / `PRIVY_APP_SECRET` | Server-side verification of Privy access tokens. |
 | `WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY` | Exactly 64 hexadecimal characters; encrypts organization-owned Wheelhouse and external-provider credentials with AES-256-GCM. |
 | One of `GROQ_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY` | At least one AI provider is required. Kivora automatically fails over in this order: Groq → Gemini → OpenRouter. |
-| `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USER`, `MAIL_PASSWORD`, `MAIL_FROM_EMAIL` | SMTP delivery for teammate invitations, matching Verith's Nodemailer configuration. For Brevo, use `smtp-relay.brevo.com`, port `587`, your Brevo SMTP login and SMTP key, and a verified sender address. |
+| `MAIL_HOST` | SMTP relay hostname. For Brevo use `smtp-relay.brevo.com`. |
+| `MAIL_USER`, `MAIL_PASSWORD` | SMTP credentials. For Brevo these are the SMTP login and SMTP key—not the Brevo API key. |
+| `MAIL_FROM_EMAIL` | Verified sender address used for invitation mail. |
 
 ### Core runtime variables
 
@@ -130,6 +133,9 @@ docker compose --env-file frontend/.env.local up --build
 | `WHEELHOUSE_CACHE_TTL_SECONDS` | `300` | Positive TTL for cacheable Wheelhouse reads. Successful writes and provider syncs invalidate affected listing reads. |
 | `SCAN_BATCH_SIZE` | `10` | Listings processed per connection scan pass; bounded to 1–10. |
 | `SCAN_INTERVAL_SECONDS` | `120` | Background scan cadence. |
+| `MAIL_PORT` | `587` | SMTP relay port. |
+| `MAIL_SECURE` | `false` | Use implicit TLS. Keep `false` for Brevo on port 587; use `true` only with an implicit-TLS endpoint such as port 465. |
+| `MAIL_FROM_NAME` | `Kivora` | Display name shown on invitation mail. |
 | `REPORT_STORAGE_PATH` | `./storage/reports` | Local report artifact path when applicable. |
 
 ### Optional integrations
@@ -146,6 +152,20 @@ docker compose --env-file frontend/.env.local up --build
 | `KIVORA_APPROVAL_TOKEN` | Optional supplemental approval token. It never bypasses Privy authentication or tenant binding. |
 
 `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_PRIVY_APP_ID` are the only browser-exposed values. Do not expose server credentials with a `NEXT_PUBLIC_` prefix.
+
+For Brevo SMTP delivery, configure the API environment with:
+
+```dotenv
+MAIL_HOST=smtp-relay.brevo.com
+MAIL_PORT=587
+MAIL_SECURE=false
+MAIL_USER=<BREVO_SMTP_LOGIN>
+MAIL_PASSWORD=<BREVO_SMTP_KEY>
+MAIL_FROM_EMAIL=<VERIFIED_SENDER_EMAIL>
+MAIL_FROM_NAME=Kivora
+```
+
+Create or rotate the SMTP key in Brevo's SMTP settings and verify the sender address or its domain before deployment. Do not substitute a Brevo REST API key for `MAIL_PASSWORD`, and never expose any mail credential through a `NEXT_PUBLIC_` variable.
 
 If SMTP delivery is unavailable (for example, on a constrained deployment), creating a teammate invitation still succeeds. Team owners and administrators are shown the secure single-use invitation URL once in Settings and can copy it to share through a trusted channel. Kivora never stores the plaintext token, so create a replacement invitation if that URL is lost.
 

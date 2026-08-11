@@ -4,7 +4,7 @@ This document distinguishes completed code-level verification from work that req
 
 ## Verified in the current codebase
 
-- Backend unit and lifecycle suite: 69 passing tests.
+- Backend unit and lifecycle suite: 28 passing tests.
 - Backend production build: passing.
 - Backend lint: passing.
 - Frontend TypeScript check: passing.
@@ -46,6 +46,7 @@ The following are intentionally not claimed complete by code compilation alone:
 | Load testing | Large portfolio scans, concurrent users, report export throughput, and scheduled bursts require dedicated load infrastructure. |
 | Accessibility testing | Keyboard, focus, screen-reader, and automated axe checks need an E2E harness. |
 | Provider contract fixtures | Every optional Wheelhouse/external endpoint should be retained as a safe fixture and periodically validated. |
+| Live SMTP invitation delivery | Unit tests verify Nodemailer configuration and message construction, but sender verification, host egress, Brevo acceptance, and inbox placement require a controlled deployed test. |
 
 ## Recommended release gate
 
@@ -54,7 +55,8 @@ Before declaring a deployment fully accepted:
 1. Run the repository verification commands.
 2. Deploy to a staging environment with production-equivalent configuration.
 3. Perform organization and role browser E2E coverage.
-4. Run a controlled live read and one explicitly approved low-risk pricing action.
-5. Verify the Wheelhouse read-back result, Kivora audit/action state, notification, and supported revert.
-6. Run real-Mongo concurrency/checkpoint tests and a portfolio-scale load test.
-7. Record outcomes and owner approval in the release record.
+4. Send one teammate invitation to a controlled inbox and verify delivery plus link acceptance using the intended email identity.
+5. Run a controlled live read and one explicitly approved low-risk pricing action.
+6. Verify the Wheelhouse read-back result, Kivora audit/action state, notification, and supported revert.
+7. Run real-Mongo concurrency/checkpoint tests and a portfolio-scale load test.
+8. Record outcomes and owner approval in the release record.

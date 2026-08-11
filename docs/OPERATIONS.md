@@ -8,7 +8,7 @@ Before deploying, ensure the environment contains the production-required variab
 - `PRIVY_APP_ID` and `PRIVY_APP_SECRET` must be configured on the API, while only `NEXT_PUBLIC_PRIVY_APP_ID` is configured in the browser.
 - `FRONTEND_URL` must include the actual deployed browser origin.
 - `BACKEND_PUBLIC_URL` must be HTTPS when Telegram is enabled.
-- Configure `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, and optionally `BREVO_SENDER_NAME` for transactional invitation delivery. The sender address or domain must be verified in Brevo. Legacy SMTP remains available through `MAILER_SERVICE`, `MAILER_USER`, `MAILER_PASS`, and `MAILER_FROM_EMAIL` when no Brevo API key is set.
+- Configure Nodemailer with `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USER`, `MAIL_PASSWORD`, and `MAIL_FROM_EMAIL`. For Brevo use `smtp-relay.brevo.com`, port `587`, `MAIL_SECURE=false`, the Brevo SMTP login as `MAIL_USER`, and the Brevo SMTP key as `MAIL_PASSWORD`. `MAIL_FROM_EMAIL` must be a verified sender; `MAIL_FROM_NAME` defaults to `Kivora`. Do not use a Brevo REST API key as the SMTP password.
 
 Do not set organization Wheelhouse credentials in frontend environment variables. Add them through the authenticated Kivora connection flow.
 
@@ -21,7 +21,8 @@ Do not set organization Wheelhouse credentials in frontend environment variables
 5. Deploy the frontend with the production API URL and Privy application ID.
 6. Sign in as an owner or administrator and connect/test the Wheelhouse account if no active connection exists.
 7. Confirm readiness returns `wheelhouseConnections > 0`.
-8. Register the Telegram webhook only after the backend has a stable HTTPS public URL and the webhook secret is set.
+8. Create a controlled teammate invitation to an inbox you own. Confirm the API reports `emailDelivery: sent`, the message arrives with both text and HTML content, and the invitation link opens the deployed frontend.
+9. Register the Telegram webhook only after the backend has a stable HTTPS public URL and the webhook secret is set.
 
 Readiness intentionally returns 503 until an active Wheelhouse connection exists. This prevents declaring a technically booted but operationally empty workspace ready.
 
@@ -58,8 +59,24 @@ Do not run a live pricing action merely to make a status badge green. “Fully c
 | Worker activity | new scan audit entries and advancing checkpoints | Check logs, lock expiry, MongoDB availability, and `SCAN_INTERVAL_SECONDS`. |
 | Action failures | visible in work-item/action history | Inspect provider error, verification payload, current listing mapping, recommendation expiry, and permission. |
 | Integration health | connected/configured | Validate Ticketmaster/OpenWeather settings; do not expose credentials in tickets or logs. |
+| Invitation email | API reports `emailDelivery: sent` and the test inbox receives it | Check SMTP configuration, verified-sender status, backend logs, and the Brevo transactional log. Rotate exposed SMTP keys. |
 
 The API logs structured request events including request ID, route, status, duration, and selected organization header. Do not add authorization headers or provider credentials to log messages.
+
+## Invitation email incidents
+
+Kivora sends invitation mail through Nodemailer and the configured SMTP relay. It renders both plain-text and HTML bodies. Creating the invitation and delivering its email are deliberately separate outcomes: if SMTP delivery fails, the pending invitation remains valid and the create response returns `emailDelivery: failed` with its one-time invitation URL for immediate trusted sharing.
+
+When delivery fails:
+
+1. Confirm `MAIL_HOST`, `MAIL_USER`, `MAIL_PASSWORD`, and `MAIL_FROM_EMAIL` are present in the backend runtime, not the frontend deployment. Confirm `MAIL_PORT` and `MAIL_SECURE` match the relay if overriding their `587` and `false` defaults.
+2. For Brevo, confirm `MAIL_USER` is the SMTP login and `MAIL_PASSWORD` is an active SMTP key. Do not use a REST API key.
+3. Confirm `MAIL_FROM_EMAIL` or its domain is verified in Brevo and permitted for that account.
+4. Confirm port `587` egress is allowed by the backend hosting provider and `MAIL_SECURE=false`. Port `465` requires `MAIL_SECURE=true` if the deployment intentionally uses it instead.
+5. Inspect safe backend error text and Brevo's transactional log without copying credentials into logs or tickets.
+6. Rotate the SMTP key immediately if it was exposed. Update the backend secret and redeploy before retesting.
+
+Do not repeatedly create invitations while diagnosing delivery. Each request revokes the prior pending invitation for that email. Use the newest returned link, or revoke it and create one replacement after SMTP is healthy.
 
 ## Wheelhouse connection incidents
 

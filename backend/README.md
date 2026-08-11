@@ -4,7 +4,7 @@ NestJS API organized using the same feature-module conventions as AjoFlow: `api`
 
 ## Live configuration
 
-Copy `.env.example` to `.env.local` and configure Privy, MongoDB, Wheelhouse, Groq, and Telegram. Ticketmaster and OpenWeather are optional live enrichments and are disabled until their keys are set. The API does not seed records or return synthetic fallback responses. In production, the Privy, MongoDB, Wheelhouse, and Groq values are required at startup. `BACKEND_PUBLIC_URL` must be the public HTTPS origin that Telegram can reach.
+Copy `.env.example` to `.env.local` and configure Privy, MongoDB, Wheelhouse, an AI provider, and SMTP invitation delivery. Telegram, Ticketmaster, and OpenWeather are optional. For Brevo, keep `MAIL_HOST=smtp-relay.brevo.com`, port `587`, and `MAIL_SECURE=false`; set `MAIL_USER` to the Brevo SMTP login, `MAIL_PASSWORD` to its SMTP key, and `MAIL_FROM_EMAIL` to a verified sender. A Brevo API key is not an SMTP key. The API does not seed records or return synthetic fallback responses. `BACKEND_PUBLIC_URL` must be the public HTTPS origin that Telegram can reach when Telegram is enabled.
 
 Privy authentication uses `PRIVY_APP_ID` and `PRIVY_APP_SECRET` through the official Node SDK. No additional verification credential is required or supported.
 

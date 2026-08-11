@@ -22,10 +22,12 @@ NestJS API
               ├─ Ticketmaster/OpenWeather: external demand signals
               ├─ Groq: grounded narrative assistance
               ├─ Telegram: per-user delivery and signed action intents
-              └─ SMTP + Handlebars: organization invitations
+              └─ Nodemailer SMTP + Handlebars: text/HTML organization invitations
 ```
 
 The web application is responsible for rendering, role-aware affordances, and user interaction. The API remains the authority for authentication, tenant scoping, mutation authorization, provider calls, lifecycle transitions, audits, and persisted records.
+
+Invitation delivery follows the same provider boundary used by Verith: the API creates a Nodemailer transport from `MAIL_HOST`, port, secure mode, and SMTP credentials, then sends a rendered Handlebars HTML body with a plain-text alternative. Invitation tokens are stored only as hashes. Delivery success stores the SMTP message identifier; delivery failure keeps the pending invitation valid and returns its one-time URL to the authorized administrator for trusted manual sharing.
 
 ## Tenant model
 
