@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { HttpModule } from "@nestjs/axios";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { MailerModule } from "@nestjs-modules/mailer";
 import { HandlebarsAdapter } from "@nestjs-modules/mailer/adapters/handlebars.adapter";
@@ -7,11 +8,12 @@ import { MailService } from "./mail.service";
 
 @Module({
   imports: [
+    HttpModule.register({ timeout: 15_000, maxRedirects: 0 }),
     MailerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        transport: {
+        transport: config.get<string>("BREVO_API_KEY") ? { jsonTransport: true } : {
           service: config.get<string>("MAILER_SERVICE"),
           auth: { user: config.get<string>("MAILER_USER"), pass: config.get<string>("MAILER_PASS") },
         },

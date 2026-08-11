@@ -144,7 +144,7 @@ export class AuthService {
       // A delivery outage must not discard a valid invitation. The plaintext
       // link is returned once to the authorized owner so it can be shared by a
       // trusted channel; only its hash is persisted.
-      await this.invitations.updateOne({ _id: invitation._id }, { $set: { deliveryProvider: "smtp", deliveryError: message } });
+      await this.invitations.updateOne({ _id: invitation._id }, { $set: { deliveryProvider: this.invitationEmail.provider, deliveryError: message } });
       return { id: String(invitation._id), email, role: input.role, status: "sent", emailDelivery: "failed", invitationUrl, expiresAt: invitation.expiresAt };
     }
   }

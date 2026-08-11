@@ -12,6 +12,7 @@ describe("InvitationEmailService", () => {
       to: "manager@example.com",
       subject: expect.stringContaining("Northstar Rentals"),
       template: "team-invitation",
+      idempotencyKey: "kivora-invitation-invite_123",
       context: expect.objectContaining({
         invitationUrl: "https://kivora.test/invite?token=private-token",
         role: "Revenue Manager",

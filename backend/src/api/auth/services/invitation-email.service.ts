@@ -24,6 +24,8 @@ export class InvitationEmailService {
     return `${this.frontendUrl}/invite?token=${encodeURIComponent(token)}`;
   }
 
+  get provider() { return this.mail.provider; }
+
   async sendInvitation(input: InvitationEmail) {
     const invitationUrl = this.invitationUrl(input.token);
     return this.mail.sendMail({
@@ -31,6 +33,7 @@ export class InvitationEmailService {
       subject: `${input.inviterName} invited you to ${input.organizationName} on Kivora`,
       template: "team-invitation",
       context: { organizationName: input.organizationName, inviterName: input.inviterName, role: this.humanize(input.role), email: input.email, invitationUrl, expiresAt: input.expiresAt.toUTCString() },
+      idempotencyKey: `kivora-invitation-${input.invitationId}`,
     });
   }
 
