@@ -4,5 +4,4 @@ export interface SendMail {
   text?: string;
   template: string;
   context: Record<string, unknown>;
-  idempotencyKey?: string;
 }

@@ -1,12 +1,16 @@
-import { of, throwError } from "rxjs";
+import nodemailer from "nodemailer";
 import { MailService } from "./mail.service";
+
+jest.mock("nodemailer", () => ({
+  __esModule: true,
+  default: { createTransport: jest.fn() },
+}));
 
 const input = {
   to: "manager@example.com",
   subject: "Join Northstar Rentals",
   text: "Ada invited you to Northstar Rentals. Accept: https://kivora.test/invite?token=private-token",
   template: "team-invitation",
-  idempotencyKey: "kivora-invitation-invite_123",
   context: {
     organizationName: "Northstar Rentals",
     inviterName: "Ada",
@@ -18,54 +22,53 @@ const input = {
 };
 
 describe("MailService", () => {
-  it("sends rendered invitations through Brevo with a stable idempotency key", async () => {
-    const post = jest.fn().mockReturnValue(of({ data: { messageId: "brevo-message-123" } }));
-    const sendMail = jest.fn();
-    const values: Record<string, string> = {
-      BREVO_API_KEY: "xkeysib-test",
-      BREVO_SENDER_EMAIL: "team@kivora.test",
-      BREVO_SENDER_NAME: "Kivora Team",
-    };
-    const config = { get: jest.fn((key: string, fallback?: string) => values[key] ?? fallback) };
-    const service = new MailService({ sendMail } as never, config as never, { post } as never);
+  const values: Record<string, string> = {
+    MAIL_HOST: "smtp-relay.brevo.com",
+    MAIL_PORT: "587",
+    MAIL_SECURE: "false",
+    MAIL_USER: "brevo-smtp-login",
+    MAIL_PASSWORD: "brevo-smtp-key",
+    MAIL_FROM_EMAIL: "team@kivora.test",
+    MAIL_FROM_NAME: "Kivora Team",
+  };
 
-    await expect(service.sendMail(input)).resolves.toEqual({ provider: "brevo", messageId: "brevo-message-123" });
+  beforeEach(() => jest.clearAllMocks());
 
-    expect(sendMail).not.toHaveBeenCalled();
-    expect(post).toHaveBeenCalledWith(
-      "https://api.brevo.com/v3/smtp/email",
-      expect.objectContaining({
-        sender: { email: "team@kivora.test", name: "Kivora Team" },
-        to: [{ email: "manager@example.com" }],
-        subject: "Join Northstar Rentals",
-        textContent: input.text,
-        htmlContent: expect.stringContaining("https://kivora.test/invite?token&#x3D;private-token"),
-        headers: { idempotencyKey: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/) },
-      }),
-      { headers: { "api-key": "xkeysib-test", accept: "application/json", "content-type": "application/json" } },
-    );
-  });
-
-  it("uses the legacy SMTP transport when Brevo is not configured", async () => {
+  it("uses Verith's Nodemailer SMTP configuration to send invitations", async () => {
     const sendMail = jest.fn().mockResolvedValue({ messageId: "smtp-message-123" });
-    const values: Record<string, string> = {
-      MAILER_SERVICE: "smtp-provider",
-      MAILER_USER: "user",
-      MAILER_PASS: "pass",
-      MAILER_FROM_EMAIL: "Kivora <team@kivora.test>",
-    };
-    const config = { get: jest.fn((key: string) => values[key]) };
-    const service = new MailService({ sendMail } as never, config as never, { post: jest.fn() } as never);
+    (nodemailer.createTransport as jest.Mock).mockReturnValue({ sendMail });
+    const config = { get: jest.fn((key: string, fallback?: string) => values[key] ?? fallback) };
+    const service = new MailService(config as never);
 
     await expect(service.sendMail(input)).resolves.toEqual({ provider: "smtp", messageId: "smtp-message-123" });
-    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: input.to, text: input.text, template: input.template }));
+    expect(nodemailer.createTransport).toHaveBeenCalledWith({
+      host: "smtp-relay.brevo.com",
+      port: 587,
+      secure: false,
+      auth: { user: "brevo-smtp-login", pass: "brevo-smtp-key" },
+    });
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({
+      from: { name: "Kivora Team", address: "team@kivora.test" },
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+      html: expect.stringContaining("https://kivora.test/invite?token&#x3D;private-token"),
+    }));
   });
 
-  it("surfaces Brevo's API error without exposing the API key", async () => {
-    const post = jest.fn().mockReturnValue(throwError(() => ({ response: { data: { message: "sender not verified" } } })));
-    const values: Record<string, string> = { BREVO_API_KEY: "secret-key", BREVO_SENDER_EMAIL: "team@kivora.test" };
+  it("reports an unconfigured SMTP provider", async () => {
+    const config = { get: jest.fn((_key: string, fallback?: string) => fallback) };
+    const service = new MailService(config as never);
+
+    await expect(service.sendMail(input)).rejects.toThrow("Email delivery is not configured");
+    expect(nodemailer.createTransport).not.toHaveBeenCalled();
+  });
+
+  it("surfaces SMTP delivery errors without exposing credentials", async () => {
+    const sendMail = jest.fn().mockRejectedValue(new Error("sender not verified"));
+    (nodemailer.createTransport as jest.Mock).mockReturnValue({ sendMail });
     const config = { get: jest.fn((key: string, fallback?: string) => values[key] ?? fallback) };
-    const service = new MailService({ sendMail: jest.fn() } as never, config as never, { post } as never);
+    const service = new MailService(config as never);
 
     await expect(service.sendMail(input)).rejects.toThrow("Email could not be sent: sender not verified");
   });

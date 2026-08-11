@@ -3,7 +3,6 @@ import { ConfigService } from "@nestjs/config";
 import { MailService } from "../../../shared/mail/mail.service";
 
 type InvitationEmail = {
-  invitationId: string;
   email: string;
   organizationName: string;
   inviterName: string;
@@ -34,7 +33,6 @@ export class InvitationEmailService {
       text: `${input.inviterName} invited you to join ${input.organizationName} as ${this.humanize(input.role)} on Kivora. Accept the invitation: ${invitationUrl}\n\nThis invitation expires ${input.expiresAt.toUTCString()}. If you were not expecting it, you can ignore this email.`,
       template: "team-invitation",
       context: { organizationName: input.organizationName, inviterName: input.inviterName, role: this.humanize(input.role), email: input.email, invitationUrl, expiresAt: input.expiresAt.toUTCString() },
-      idempotencyKey: `kivora-invitation-${input.invitationId}`,
     });
   }
 

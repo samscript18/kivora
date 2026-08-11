@@ -115,8 +115,7 @@ docker compose --env-file frontend/.env.local up --build
 | `PRIVY_APP_ID` / `PRIVY_APP_SECRET` | Server-side verification of Privy access tokens. |
 | `WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY` | Exactly 64 hexadecimal characters; encrypts organization-owned Wheelhouse and external-provider credentials with AES-256-GCM. |
 | One of `GROQ_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY` | At least one AI provider is required. Kivora automatically fails over in this order: Groq → Gemini → OpenRouter. |
-| `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` | Preferred Brevo transactional-email configuration for teammate invitations. The sender must be verified in Brevo. |
-| `MAILER_SERVICE`, `MAILER_USER`, `MAILER_PASS`, `MAILER_FROM_EMAIL` | Legacy SMTP fallback used only when `BREVO_API_KEY` is not configured. |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USER`, `MAIL_PASSWORD`, `MAIL_FROM_EMAIL` | SMTP delivery for teammate invitations, matching Verith's Nodemailer configuration. For Brevo, use `smtp-relay.brevo.com`, port `587`, your Brevo SMTP login and SMTP key, and a verified sender address. |
 
 ### Core runtime variables
 

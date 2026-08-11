@@ -12,14 +12,10 @@ export function validateEnvironment(env: Environment) {
   required(env.WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY, "WHEELHOUSE_CREDENTIAL_ENCRYPTION_KEY", production);
   if (production && !env.GROQ_API_KEY && !env.GEMINI_API_KEY && !env.OPENROUTER_API_KEY)
     throw new Error("Configure at least one AI provider: GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY");
-  if (production && env.BREVO_API_KEY) {
-    required(env.BREVO_SENDER_EMAIL, "BREVO_SENDER_EMAIL", true);
-  } else {
-    required(env.MAILER_SERVICE, "MAILER_SERVICE", production);
-    required(env.MAILER_USER, "MAILER_USER", production);
-    required(env.MAILER_PASS, "MAILER_PASS", production);
-    required(env.MAILER_FROM_EMAIL, "MAILER_FROM_EMAIL", production);
-  }
+  required(env.MAIL_HOST, "MAIL_HOST", production);
+  required(env.MAIL_USER, "MAIL_USER", production);
+  required(env.MAIL_PASSWORD, "MAIL_PASSWORD", production);
+  required(env.MAIL_FROM_EMAIL, "MAIL_FROM_EMAIL", production);
   if (production && env.TELEGRAM_BOT_TOKEN) {
     required(env.TELEGRAM_WEBHOOK_SECRET, "TELEGRAM_WEBHOOK_SECRET", true);
     required(env.TELEGRAM_LINK_SECRET, "TELEGRAM_LINK_SECRET", true);
