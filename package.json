@@ -9,5 +9,8 @@
     "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "test": "npm --prefix backend test",
     "lint": "npm --prefix backend run lint && npm --prefix frontend run lint"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.1"
   }
 }
